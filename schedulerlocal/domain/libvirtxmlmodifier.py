@@ -1,13 +1,4 @@
-import libvirt, getopt, sys
-from dotenv import load_dotenv
 from xml.dom import minidom
-
-def connect_to_libvirt():
-    url = 'qemu:///system'
-    conn = libvirt.open(url)
-    if not conn:
-        raise SystemExit('Failed to open connection to ' + url)
-    return conn
 
 class xmlObject(object):
 
@@ -196,37 +187,3 @@ class xmlDomainCpu(xmlObject):
         #domain.pinVcpuFlags()
         print(domain.numaParameters())
         #domain.setNumaParameters()
-
-if __name__ == '__main__':
-
-    short_options = 'h'
-    long_options = ['help']
-
-    try:
-        arguments, values = getopt.getopt(sys.argv[1:], short_options, long_options)
-    except getopt.error as err:
-        print (str(err)) # Output error, and return with an error code
-        sys.exit(2)
-    for current_argument, current_value in arguments:
-        if current_argument in ('-h', '--help'):
-            print('python3 vmpinning.py [--help]')
-            sys.exit(0)
-
-    try:
-        conn = connect_to_libvirt()
-        vm_shutdown = [conn.lookupByName(name) for name in conn.listDefinedDomains()]
-        vm_alive    = [conn.lookupByID( vmid ) for vmid in conn.listDomainsID()]
-        for domain in vm_alive:
-
-            requested_topology = {'sockets':1, 'dies':1, 'cores':1, 'threads':2}
-            attributes = list(requested_topology.keys())
-
-            domain_xml = xmlDomainCpu(xml_as_str=domain.XMLDesc())
-
-            print(domain_xml.convert_to_str_xml())
-            #conn.defineXML(domain_xml.convert_to_str_xml())
-
-        conn.close()
-
-    except KeyboardInterrupt:
-        print("Program interrupted")

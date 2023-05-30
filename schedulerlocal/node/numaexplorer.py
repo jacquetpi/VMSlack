@@ -1,7 +1,7 @@
-import sys, getopt, re
+import re
 from os import listdir
 from os.path import isfile, join, exists
-from servercpuset import ServerCpuSet, ServerCpu
+from schedulerlocal.node.servercpuset import ServerCpu, ServerCpuSet
 
 class NumaExplorer:
     """
@@ -211,34 +211,3 @@ class NumaExplorer:
             return list(range(left_member, right_member))
         else:
             return [int(text_to_convert)]
-
-def print_usage(self):
-    print('todo')
-
-if __name__ == '__main__':
-
-    short_options = "hd:l:"
-    long_options = ["help", "debug=", "load="]
-
-    cpuset = None
-    debug_level = 0
-    try:
-        arguments, values = getopt.getopt(sys.argv[1:], short_options, long_options)
-    except getopt.error as err:
-        print(str(err))
-        print_usage()
-    for current_argument, current_value in arguments:
-        if current_argument in ('-h', '--help'):
-            print_usage()
-        elif current_argument in('-l', '--load'):
-            cpuset = ServerCpuSet().load_from_json(current_value).build_distances()
-        elif current_argument in('-d', '--debug'):
-            debug_level = int(current_value)
-
-    if cpuset is None:
-        explorer = NumaExplorer()
-        cpuset = explorer.build_cpuset()
-
-    if debug_level>0: cpuset.dump_as_json('debug/cpuset_local.json')
-        
-
