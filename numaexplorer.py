@@ -240,6 +240,5 @@ if __name__ == '__main__':
         cpuset = explorer.build_cpuset()
 
     if debug_level>0: cpuset.dump_as_json('debug/cpuset_local.json')
-    print(cpuset.get_distances())
         
 

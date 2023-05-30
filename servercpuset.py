@@ -198,8 +198,8 @@ class ServerCpuSet(object):
         cpu_list = list()
         with open(filename, 'r') as f: 
             raw_object = load(f)
-            self.numa_distances = raw_object['numa_distances']
-            self.distances = raw_object['distances']
+            self.numa_distances = {int(k):v for k,v in raw_object['numa_distances'].items()}
+            self.distances = {int(k):{int(kprime):vprime for kprime,vprime in v.items()} for k,v in raw_object['distances'].items()}
             self.cpu_list = list()
             for raw_cpu in raw_object['cpu_list']: self.cpu_list.append(ServerCpu(**raw_cpu))
         return self
