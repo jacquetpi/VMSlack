@@ -21,7 +21,7 @@ class xmlObject(object):
         raise NotImplementedError()
 
     def convert_to_str_xml(self):
-        dom_root, dom_targeted = self.get_all_dom() 
+        dom_root, dom_targeted = self.get_all_dom()
         self.update_dom(dom_targeted)
         return dom_root.toprettyxml()
 
@@ -60,7 +60,7 @@ class xmlDomainCpuNumaCell(xmlObject):
         self.cells['cpus'] = str(self.id)
         self.cells['memory'] = '512000'
         self.cells['unit'] = 'KiB'
-        for index in range(self.cpu_count): 
+        for index in range(self.cpu_count):
             if index == self.id:
                 self.distances[index]=10
             else:
@@ -81,9 +81,9 @@ class xmlDomainCpuNumaCell(xmlObject):
 
     def convert_to_object(self):
         dom_cell = self.get_dom_specific(self.get_dom_root())
-        for attribute in self._cell_attributes: 
+        for attribute in self._cell_attributes:
             self.cells[attribute] = dom_cell.getAttribute(attribute)
-        
+
         dom_distances_list = dom_cell.getElementsByTagName('distances')
         if len(dom_distances_list)<1:
             print("Warning, no distances found")

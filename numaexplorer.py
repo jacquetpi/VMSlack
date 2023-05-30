@@ -1,6 +1,6 @@
+import sys, getopt, re
 from os import listdir
 from os.path import isfile, join, exists
-import re
 from servercpuset import ServerCpuSet, ServerCpu
 
 class NumaExplorer:
@@ -33,29 +33,28 @@ class NumaExplorer:
         self.fs_numa_distance = '/distance'
 
     def build_cpuset(self):
-        """Retrieve numa distances data as a dict
+        """Build a ServerCpuSet object from linux filesystem data
         ----------
 
         Returns
         -------
-        numa_topology : dict
-            dict of numa distances
+        cpuset : ServerCpuSet
+            Local Cpuset
         """
         cpuset = ServerCpuSet()
         cpu_list = self.__retrieve_cpu_list()
         for cpu in cpu_list: cpuset.add_cpu(self.__read_cpu(cpu, cpu_list))
-        numa_distances = self.__read_numa_distance()
-        cpuset.build(numa_distances=numa_distances)
-        return cpuset
+        cpuset.set_numa_distances(self.__read_numa_distance())
+        return cpuset.build_distances()
 
     def __retrieve_cpu_list(self):
-        """Retrieve the list of cpu id conform to to_include and to_exclude attributes list
+        """Retrieve the list of cpu id conform to to_include and to_exclude attributes
         ----------
 
         Returns
         -------
-        folders : str
-            list of topology folders  
+        cpu_conform : str
+            list of CPU
         """
         regex = '^cpu[0-9]+$'
         cpu_found = [int(re.sub("[^0-9]", '', f)) for f in listdir(self.fs_cpu) if not isfile(join(self.fs_cpu_topology, f)) and re.match(regex, f)]
@@ -64,13 +63,20 @@ class NumaExplorer:
         return cpu_conform
 
     def __read_cpu(self, cpu : int, conform_cpu_list : list):
-        """Retrieve numa distances data as a dict
+        """Build a ServerCpu object from specified cpu id using Linux filesystem data
         ----------
+
+        Parameters
+        ----------
+        cpu : int
+            ID of targeted CPU
+        conform_cpu_list : list
+            List of others conform CPU to build sibling lists
 
         Returns
         -------
-        cpu_topology : dict
-            dict of numa distances
+        cpu : ServerCpu
+            ServerCpu object describing targeted CPU
         """
         conform_cpu_list_copy = list(set(conform_cpu_list))
         if cpu in conform_cpu_list_copy: del conform_cpu_list_copy[cpu]
@@ -85,16 +91,48 @@ class NumaExplorer:
             max_freq=max_freq)
 
     def __read_cpu_topology(self, cpu : int, conform_cpu_list : list):
+        """Retrieve topology related data of specified cpu from Linux filesystem
+        ----------
+
+        Parameters
+        ----------
+        cpu : int
+            ID of targeted CPU
+        conform_cpu_list : list
+            List of others conform CPU to build sibling lists
+
+        Returns
+        -------
+        numa_id : int
+            Id of numa node hosting the CPU
+        sib_smt_list : list
+            List of CPU id being SMT sibling to the CPU
+        sib_cpu_list : list
+            List of CPU id being socket sibling to the CPU
+        """
         topology_folder = self.fs_cpu + 'cpu' + str(cpu) + self.fs_cpu_topology
         with open(topology_folder + '/physical_package_id', 'r') as f:
-            socket_id = int(f.read())
+            numa_id = int(f.read())
         with open(topology_folder + '/thread_siblings_list', 'r') as f:
             sib_smt_list = [sibling_smt for sibling_smt in self.__convert_text_to_list(f.read()) if (sibling_smt != cpu) and sibling_smt in conform_cpu_list]
         with open(topology_folder + '/core_siblings_list', 'r') as f:
             sib_cpu_list = [sibling_cpu for sibling_cpu in self.__convert_text_to_list(f.read()) if (sibling_cpu != cpu) and sibling_cpu in conform_cpu_list]
-        return socket_id, sib_smt_list, sib_cpu_list
+        return numa_id, sib_smt_list, sib_cpu_list
 
     def __read_cpu_cache(self, cpu : int):
+        """Retrieve cache related data of specified cpu from Linux filesystem
+        ----------
+
+        Parameters
+        ----------
+        cpu : int
+            ID of targeted CPU
+
+        Returns
+        -------
+        cache_dict : dict
+            Dictionary of cache level (as key) specifying the related cache unique identifier
+        """
         cache_level = 0
         cache_dict = dict()
         while(True):
@@ -106,33 +144,102 @@ class NumaExplorer:
         return cache_dict
 
     def __read_cpu_maxfreq(self, cpu : int):
+        """Retrieve CPU max frequency of specified cpu from Linux filesystem
+        ----------
+
+        Parameters
+        ----------
+        cpu : int
+            ID of targeted CPU
+
+        Returns
+        -------
+        maxfreq : int
+            Max frequency
+        """
         maxfreq_file = self.fs_cpu + 'cpu' + str(cpu) + self.fs_cpu_maxfreq
         with open(maxfreq_file , 'r') as f:
             maxfreq = int(f.read())
         return maxfreq
 
     def __read_numa_distance(self):
+        """Retrieve distances of local numa node
+        ----------
+
+        Parameters
+        ----------
+        cpu : int
+            ID of targeted CPU
+
+        Returns
+        -------
+        numa_dict : dict
+            Dictionary of numa id (as key) specifying the distance to others numa node
+        """
         numa_index = 0
         numa_dict = dict()
         while True:
             fs_distance = self.fs_numa + 'node' + str(numa_index) + self.fs_numa_distance
             if not exists(fs_distance): break
             with open(fs_distance, 'r') as f:
-                numa_dict[numa_index] = f.read().replace('\n', '').split(' ')
+                numa_dict[numa_index] = [int(element) for element in f.read().replace('\n', '').split(' ')]
             numa_index+=1
         return numa_dict
 
     def __convert_text_to_list(self, text : str):
+        """Convert a text as observed in /sys/device fs to a list of integers
+        ----------
+
+        Parameters
+        ----------
+        text : str
+            Text to convert
+
+        Returns
+        -------
+        converted_list : list
+            List of integers
+        """
         text_to_convert = text.replace('\n', '')
-        if ',' in text_to_convert: 
-            return [int(element) for element in text_to_convert.split(',')]
+        if ',' in text_to_convert:
+            result_list = list()
+            for element in text_to_convert.split(','): result_list.extend(self.__convert_text_to_list(element))
+            return result_list
         elif '-' in text_to_convert:
             left_member = int(text_to_convert[:text_to_convert.find('-')])
             right_member = int(text_to_convert[text_to_convert.find('-')+1:])
             return list(range(left_member, right_member))
         else:
-            return list(int(text_to_convert))
+            return [int(text_to_convert)]
+
+def print_usage(self):
+    print('todo')
 
 if __name__ == '__main__':
-    t = NumaExplorer()
-    t.build_cpuset()
+
+    short_options = "hd:l:"
+    long_options = ["help", "debug=", "load="]
+
+    cpuset = None
+    debug_level = 0
+    try:
+        arguments, values = getopt.getopt(sys.argv[1:], short_options, long_options)
+    except getopt.error as err:
+        print(str(err))
+        print_usage()
+    for current_argument, current_value in arguments:
+        if current_argument in ('-h', '--help'):
+            print_usage()
+        elif current_argument in('-l', '--load'):
+            cpuset = ServerCpuSet().load_from_json(current_value).build_distances()
+        elif current_argument in('-d', '--debug'):
+            debug_level = int(current_value)
+
+    if cpuset is None:
+        explorer = NumaExplorer()
+        cpuset = explorer.build_cpuset()
+
+    if debug_level>0: cpuset.dump_as_json('debug/cpuset_local.json')
+    print(cpuset.get_distances())
+        
+
