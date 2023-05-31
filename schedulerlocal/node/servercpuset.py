@@ -20,6 +20,12 @@ class ServerCpu(object):
     max_freq :
         Max CPU frequency
 
+    Public Methods
+    -------
+    compute_distance_to_cpu()
+        Given another ServerCPU instance, compute the relative distance between them
+    Getter/Setter
+
     """
     def __init__(self, **kwargs):
         req_attributes = ['cpu_id', 'numa_node', 'sib_smt', 'sib_cpu', 'cache_level', 'max_freq']
@@ -72,31 +78,70 @@ class ServerCpu(object):
         return distance
 
     def get_cpu_id(self):
+        """Return unique CPUID
+        ----------
+        """
         return self.cpu_id
 
     def get_numa_node(self):
+        """Return numa node related to the CPU
+        ----------
+        """
         return self.numa_node
 
     def get_sib_smt(self):
+        """Return CPUID of siblings SMT cores
+        ----------
+        """
         return self.sib_smt
 
     def get_sib_cpu(self):
+        """Return CPUID of siblings socket cores
+        ----------
+        """
         return self.sib_cpu
 
     def get_cache_level(self):
+        """Return dict of cacheid related to the CPU
+        ----------
+        """
         return self.cache_level
 
     def get_max_freq(self):
+        """Return core max freq
+        ----------
+        """
         return self.max_freq
 
     def __str__(self):
+        """Return string representation of the core
+        ----------
+        """
         return 'cpu' + str(self.get_cpu_id()) +\
             ' ' + str(self.get_max_freq()/1000) + 'Mhz' +\
             ' on numa node ' + str(self.get_numa_node()) +\
             ' with cache level id ' + str(self.get_cache_level()) + '\n'
 
 class ServerCpuSetEncoder(JSONEncoder):
+    """
+    Class to specify on to convert ServerCpuSet to JSON
+    ...
+
+    Public Methods
+    -------
+    default():
+        json conversion
+    """
+
     def default(self, o):
+        """Implements Conversion strategy
+        ----------
+
+        Parameters
+        ----------
+        o : object
+            object to convert
+        """
         if type(o) is not ServerCpuSet:
             return
         as_dict = dict(o.__dict__)
@@ -124,6 +169,11 @@ class ServerCpuSet(object):
         Add a cpu to the considered cpuset
     build_distances():
         Build relative distances of given cpuset
+    dump_as_json():
+        build object attributes in json file
+    load_from_json():
+        load object attributes from json file
+    Getter/Setter
     """
 
     def __init__(self, **kwargs):
@@ -132,42 +182,33 @@ class ServerCpuSet(object):
         self.distances = kwargs['distances'] if 'distances' in kwargs else dict()
 
     def add_cpu(self, cpu : ServerCpu):
+        """Add a ServerCpu object
+        ----------
+
+        Parameters
+        ----------
+        cpu : ServerCpu
+            cpu to add
+        """
         self.cpu_list.append(cpu)
 
     def build_distances(self):
         """For each CPU tuple possible in the cpuset, compute the distance based on Cache Level, siblings and numa distances
+        Distances are ordered.
         ----------
         """
         if self.numa_distances is None:
             raise ValueError('Numa distances weren\'t previously set')
         self.distances = dict()
         for cpu in self.cpu_list:
-            self.distances[cpu.get_cpu_id()] = dict()
+            single_cpu_distances = dict()
             others_cpu = list(self.cpu_list)
             others_cpu.remove(cpu)
             for other_cpu in others_cpu:
-                distance = cpu.compute_distance_to_cpu(other_cpu, numa_distances=self.numa_distances)
-                self.distances[cpu.get_cpu_id()][other_cpu.get_cpu_id()] = distance
+                single_cpu_distances[other_cpu.get_cpu_id()] = cpu.compute_distance_to_cpu(other_cpu, self.numa_distances)
+            # Reorder distances from the closest one to the farthest one 
+            self.distances[cpu.get_cpu_id()] = {k:v for k, v in sorted(single_cpu_distances.items(), key=lambda item: item[1])}
         return self
-
-    def get_priority_list(self, cpu_id):
-        """For a given cpu, return an ordered list of CPU, from the closest one to the farthest one
-        ----------
-
-        Parameters
-        ----------
-        cpu_id : int
-            CPU to consider
-
-        Returns
-        -------
-        ordered_list : list
-            List of CPU id
-        """
-        if not self.distances: raise ValueError('Distances werent previously build')
-        distances_from_cpu = self.distances[cpu_id]
-        ordered_list = [k for k, v in sorted(distances_from_cpu.items(), key=lambda item: item[1])]
-        return ordered_list
 
     def dump_as_json(self, filename : str):
         """Dump current state in a json file
@@ -195,7 +236,6 @@ class ServerCpuSet(object):
         self : ServerCpuSet
             itself
         """
-        cpu_list = list()
         with open(filename, 'r') as f: 
             raw_object = load(f)
             self.numa_distances = {int(k):v for k,v in raw_object['numa_distances'].items()}
@@ -205,16 +245,31 @@ class ServerCpuSet(object):
         return self
 
     def get_cpu_list(self):
+        """Return CPU list
+        ----------
+        """
         return self.cpu_list
 
     def set_cpu_list(self, cpu_list : list):
+        """Set CPU list
+        ----------
+        """
         self.cpu_list = cpu_list
 
     def get_numa_distances(self):
+        """Return numa distances as dict
+        ----------
+        """
         return self.numa_distances
 
     def set_numa_distances(self, numa_distances : dict):
+        """Set numa distances
+        ----------
+        """
         self.numa_distances = numa_distances
 
     def get_distances(self):
+        """Return distances (empty dict if they werent previously build with build_distances() method)
+        ----------
+        """
         return self.distances

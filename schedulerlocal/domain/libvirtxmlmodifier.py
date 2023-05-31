@@ -1,6 +1,33 @@
 from xml.dom import minidom
 
 class xmlObject(object):
+    """
+    Advanced Libvirt configuration relies sometimes on XML modification.
+    xmlObject and its child classes allows to modify specific portion of a XML libvirt domain description
+    ...
+
+    Attributes
+    ----------
+    xml : minidom.Document
+        XML document
+
+    Public Methods
+    -------
+    convert_to_object()
+        Using xml attribute, convert xml "data of interest" to attributes. Child specific. Must be reimplemented
+    convert_to_str_xml()
+        Return an XML string of current state
+    update_dom()
+        Using current object attributes, update xml document. Child specific. Must be reimplemented
+    get_all_dom()
+        Return root XML minidom.Document jointly with specific dom (refer to get_dom_specific)
+    get_dom_root()
+        Return root XML minidom.Document
+    get_dom_specific()
+        Return element of interest in XML. Each child class typically target access/modification of a specific XML element. Child specific. Must be reimplemented
+    parse()
+        Convert an XML string to a XML minidom.Document
+    """
 
     def __init__(self, xml_as_document = None, xml_as_str = None):
         self.xml = None
@@ -9,42 +36,88 @@ class xmlObject(object):
         if self.xml is not None: self.convert_to_object()
 
     def convert_to_object(self):
+        """Using xml attribute, convert xml "data of interest" to attributes. Child specific. Must be reimplemented
+        ----------
+        """
         raise NotImplementedError()
 
     def convert_to_str_xml(self):
+        """Return an XML string of current state
+        ----------
+        """
         dom_root, dom_targeted = self.get_all_dom()
         self.update_dom(dom_targeted)
-        return dom_root.toprettyxml()
+        return dom_root.toxml()
 
     def update_dom(self, dom_targeted : minidom.Document):
+        """Using current object attributes, update xml document. Child specific. Must be reimplemented
+        ----------
+
+        Parameters
+        ----------
+        dom_targeted : minidom.Document
+            the document to consider while updating attributes
+        """
         raise NotImplementedError()
 
     def get_all_dom(self):
-        return self.get_dom_root(), self.get_dom_specific(self.xml)
+        """Return root XML minidom.Document jointly with specific dom (refer to get_dom_specific)
+        ----------
+        """
+        return self.get_dom_root(), self.get_dom_specific(self.get_dom_root())
 
     def get_dom_root(self):
+        """Return root XML minidom.Document
+        ----------
+        """
         return self.xml
 
-    def get_dom_specific(self, dom_root : minidom.Document): # default to cpu node
+    def get_dom_specific(self, dom_root : minidom.Document):
+        """Return element of interest in XML. Each child class typically target access/modification of a specific XML element. 
+        Child must reiplement it and may call this super implemtation to refer to default cpu element
+        ----------
+        """
         dom_cpu_list =  dom_root.getElementsByTagName("cpu")
         if len(dom_cpu_list) != 1: raise ValueError("Incorrect number of cpu node in xml", len(dom_cpu_list))
         return dom_cpu_list[0]
 
     def parse(self, to_be_parsed : str):
+        """Convert an XML string to a XML minidom.Document
+        ----------
+        """
         return minidom.parseString(to_be_parsed)
 
 class xmlDomainCpuNumaCell(xmlObject):
+    """
+    Allow modification of a NumaCell XML element. Must be used jointly with xmlDomainNuma as numacell is a child element.
+    ...
+
+    Public Methods reimplemented/introduced
+    -------
+    convert_to_object()
+        Using xml attribute, convert xml data related to numa cell to object attributes.
+    update_dom()
+        Using current object numa attributes, update xml document
+    get_dom_specific()
+        Return Numa cell XML element
+    """
 
     def __init__(self, xml_as_document = None, xml_as_str = None, id : int = None, cpu_count : int = None,):
         self.id=id
         self.cpu_count=cpu_count # to generate default
-        self._cell_attributes = ['id', 'cpus']
-        #self._cell_attributes = ['id', 'cpus', 'memory', 'unit']
+        self._cell_attributes = ['id', 'cpus', 'memory', 'unit']
         self.cells = dict()
         self.distances = dict()
         super().__init__(xml_as_document=xml_as_document,xml_as_str=xml_as_str)
 
-    def initialize_default_cell(self, dom_root : minidom.Document):
+    def __initialize_default_cell(self, dom_root : minidom.Document):
+        """Initialize a default NUMA cell in XML
+        
+        Parameters
+        ----------
+        dom_root : minidom.Document
+            the document to consider while creating element
+        """
         # Initialize object attribute
         self.cells = dict()
         self.cells['id'] = str(self.id)
@@ -71,6 +144,9 @@ class xmlDomainCpuNumaCell(xmlObject):
         return dom_cell
 
     def convert_to_object(self):
+        """Using xml attribute, convert xml data related to numa cell to object attributes.
+        ----------
+        """
         dom_cell = self.get_dom_specific(self.get_dom_root())
         for attribute in self._cell_attributes:
             self.cells[attribute] = dom_cell.getAttribute(attribute)
@@ -87,9 +163,23 @@ class xmlDomainCpuNumaCell(xmlObject):
             raise ValueError("Incorrect number of 'distances' node in xml", len(dom_distances_list))
 
     def update_dom(self, dom_targeted : minidom.Element):
+        """Using current object numa cell attributes, update xml document
+        
+        Parameters
+        ----------
+        dom_targeted : minidom.Document
+            the document to consider while updating attributes
+        """
         for attribute in self._cell_attributes : dom_targeted.setAttribute(attribute, self.cells[attribute])
 
-    def get_dom_specific(self, dom_root : minidom.Document): # Return cell node (create it if not present)
+    def get_dom_specific(self, dom_root : minidom.Document):
+        """Return Numa cell XML element (create it if not present)
+        
+        Parameters
+        ----------
+        dom_root : minidom.Document
+            the document to consider while searching element
+        """
         dom_cpu = super().get_dom_specific(dom_root)
 
         dom_numa_list = dom_cpu.getElementsByTagName('numa')
@@ -104,6 +194,15 @@ class xmlDomainCpuNumaCell(xmlObject):
         return self.__get_dom_cell_in_numa(dom_root, dom_numa)
 
     def __get_dom_cell_in_numa(self, dom_root : minidom.Document, dom_numa : minidom.Element):
+        """Return Numa cell XML element (create it if not present)
+        
+        Parameters
+        ----------
+        dom_root : minidom.Document
+            the document to consider if creation is needed
+        dom_numa : minidom.Element
+            the element to start searching from
+        """
         dom_cell_list = dom_numa.getElementsByTagName('cell')
 
         dom_cell = None
@@ -112,15 +211,38 @@ class xmlDomainCpuNumaCell(xmlObject):
                 dom_cell = dom_cell_tested
 
         if dom_cell == None:
-            dom_cell = self.initialize_default_cell(dom_root)
+            dom_cell = self.__initialize_default_cell(dom_root)
             dom_numa.appendChild(dom_cell)
 
         return dom_cell
 
     def __str__(self):
+        """
+        Return a string representation of the cell
+        ----------
+        """
         return 'cell id=' + str(self.cells['id']) +' cpus=' + str(self.cells['cpus']) + ' memory=' + str(self.cells['memory']) +' unit=' + str(self.cells['unit']) + ' distances: ' + str(self.distances) + '\n'
 
-class xmlDomainCpu(xmlObject):
+class xmlDomainNuma(xmlObject):
+    """
+    Allow modification of a CPU numa XML element.
+    ...
+
+    Public Methods reimplemented/introduced
+    -------
+    convert_to_object()
+        Using xml attribute, convert xml data related to numa node to object attributes.
+    update_dom()
+        Using current object numa attributes, update xml document
+    get_dom_specific()
+        Return Numa node XML element
+    get_topology_as_dict()
+        Return CPU topology found as dict
+    set_topology_as_dict()
+        Set custom topology
+    get_cpu_count()
+        Compute and return cpu count from NUMA specification
+    """
 
     def __init__(self, xml_as_document = None, xml_as_str = None):
         self._topology_attributes = ['sockets', 'dies', 'cores', 'threads']
@@ -130,6 +252,9 @@ class xmlDomainCpu(xmlObject):
         super().__init__(xml_as_document=xml_as_document,xml_as_str=xml_as_str)
 
     def convert_to_object(self):
+        """Using xml attribute, convert xml data related to numa node to object attributes.
+        ----------
+        """
         dom_root, dom_topology = self.get_all_dom()
         for attribute in self._topology_attributes : self.topology[attribute] = dom_topology.getAttribute(attribute)
 
@@ -146,18 +271,34 @@ class xmlDomainCpu(xmlObject):
             raise ValueError("Incorrect number of 'numa' node in xml", len(dom_numa_list))
 
     def get_topology_as_dict(self):
+        """Return CPU topology found as dict
+        ----------
+        """
         return self.topology
 
     def set_topology_as_dict(self, topology):
+        """Set custom topology
+        ----------
+        """
         self.topology=topology
 
     def get_cpu_count(self):
+        """Compute and return cpu count from NUMA specification
+        ----------
+        """
         count=1
         for attribute in self._topology_attributes:
             if attribute != 'dies': count*= int(self.topology[attribute])
         return count
 
     def update_dom(self, dom_targeted : minidom.Element):
+        """Using current object numa attributes, update xml document
+        
+        Parameters
+        ----------
+        dom_targeted : minidom.Document
+            the document to consider while updating attributes
+        """
         if dom_targeted==None: dom_targeted=self.get_dom_specific()
         # Update current object
         for attribute in self._topology_attributes : dom_targeted.setAttribute(attribute, self.topology[attribute])
@@ -165,7 +306,14 @@ class xmlDomainCpu(xmlObject):
         for numa_cell in self.numa_cells: numa_cell.update_dom(dom_targeted=numa_cell.get_dom_specific(numa_cell.get_dom_root()))
         return dom_targeted
 
-    def get_dom_specific(self, dom_root : minidom.Document): # Return topology node
+    def get_dom_specific(self, dom_root : minidom.Document):
+        """Return topology XML element
+        
+        Parameters
+        ----------
+        dom_root : minidom.Document
+            the document to consider while searching element
+        """
         dom_cpu = super().get_dom_specific(dom_root)
 
         dom_topology_list = dom_cpu.getElementsByTagName('topology')
@@ -173,17 +321,95 @@ class xmlDomainCpu(xmlObject):
         return dom_topology_list[0]
 
     def __str__(self):
+        """
+        Return a string representation of CPU topology
+        ----------
+        """
         return ' '.join([attribute + ':' + str(self.topology[attribute]) for attribute in self._topology_attributes]) + '\n' +\
              ''.join(['  ' + numa_cell.__str__() for numa_cell in self.numa_cells])
 
-    def live_change(self, domain):
-        print(domain.emulatorPinInfo())
-        #domain.pinEmulator()
-        print(domain.ioThreadInfo())
-        #domain.pinIOThread()
-        print(domain.vcpuPinInfo())
-        #domain.pinVcpu()
-        print(domain.vcpusFlags())
-        #domain.pinVcpuFlags()
-        print(domain.numaParameters())
-        #domain.setNumaParameters()
+class xmlDomainMetaData(xmlObject):
+    """
+    Allow modification of oversubscription related metadata (custom field from our implementation)
+    ...
+
+    Public Methods reimplemented/introduced
+    -------
+    convert_to_object()
+        Using xml attribute, convert xml data related to numa node to object attributes.
+    update_dom()
+        Using current object numa attributes, update xml document
+    get_dom_specific()
+        Return Numa node XML element
+    updated()
+        Return true if XML modification occured (due to missing fields). False otherwise.
+    get_oversub_ratios()
+        Return dict of oversubscription found
+    """
+
+    def __init__(self, xml_as_document = None, xml_as_str = None):
+        self.oversub_attributes = ['cpu', 'mem', 'disk', 'network']
+        self.oversub = dict()
+        self.was_updated = False
+        super().__init__(xml_as_document=xml_as_document,xml_as_str=xml_as_str)
+
+    def get_dom_specific(self, dom_root : minidom.Document):
+        """Return oversubscription metadata cell element (create it if not present)
+        
+        Parameters
+        ----------
+        dom_root : minidom.Document
+            the document to consider while searching element
+        """
+        # Focus on metadata node
+        dom_metadata_list =  dom_root.getElementsByTagName("metadata")
+        if len(dom_metadata_list) > 1: 
+            raise ValueError("Incorrect number of metadata node in xml", len(dom_metadata_list))
+        elif  len(dom_metadata_list) == 0:
+            dom_metadata =  dom_root.createElement('metadata')
+            dom_root.appendChild(dom_metadata)
+        else: dom_metadata = dom_metadata_list[0]
+
+        # Focus on oversubscription node
+        dom_oversub_list = dom_metadata.getElementsByTagName('sched:ratio')
+        if len(dom_oversub_list)>1:
+            raise ValueError("Incorrect number of 'sched:ratio' node in xml", len(dom_oversub_list))
+        elif len(dom_oversub_list)<1:
+            defaults = {'xmlns:sched':'1.0.0', 'cpu':1.0, 'mem':1.0, 'disk':1.0, 'network':1.0}
+            dom_oversub = dom_root.createElement('sched:ratio')
+            dom_metadata.appendChild(dom_oversub)
+            for default_key, default_value in defaults.items(): dom_oversub.setAttribute(default_key, default_value)
+            self.was_updated = True
+        else: dom_oversub = dom_oversub_list[0]
+        
+        return dom_oversub
+            
+    def convert_to_object(self):
+        """Using xml attribute, convert xml data related oversubscription to object attributes.
+        ----------
+        """
+        dom_cell = self.get_dom_specific(self.get_dom_root())
+        for attribute in self.oversub_attributes:
+            self.oversub[attribute] = float(dom_cell.getAttribute(attribute))
+
+    def update_dom(self, dom_targeted : minidom.Element):
+        """Using current object metadata attributes, update xml document
+        
+        Parameters
+        ----------
+        dom_targeted : minidom.Document
+            the document to consider while updating attributes
+        """
+        for attribute in self.oversub_attributes: dom_targeted.setAttribute(attribute, str(self.oversub[attribute]))
+
+    def updated(self):
+        """Return true if XML modification occured (due to missing fields). False otherwise.
+        ----------
+        """
+        return self.was_updated
+
+    def get_oversub_ratios(self):
+        """Return dict of oversubscription found
+        ----------
+        """
+        return self.oversub

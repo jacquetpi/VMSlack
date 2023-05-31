@@ -44,7 +44,10 @@ if __name__ == '__main__':
     ###########################################
     # Third, launch scheduling facilities
     ###########################################
-    scheduler_local = SchedulerLocal(tick=2, debug_level=debug_level)
+    scheduler_local = SchedulerLocal(cpuset=cpuset,\
+                                    connector=libvirt_connector,\
+                                    tick=2,\
+                                    debug_level=debug_level)
     try:
         scheduler_local.run()
     except KeyboardInterrupt:
