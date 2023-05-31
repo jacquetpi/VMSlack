@@ -1,9 +1,11 @@
 from schedulerlocal.node.servercpuset import ServerCpuSet
 from schedulerlocal.domain.libvirtconnector import LibvirtConnector
+import math
 
-class AllocationTracker(object): # Abstract class
+class AllocationTracker(object):
     """
     A tracker is a class in charge of monitoring the resources allocated and compute available ones
+    Abstract class
     ...
 
     Attributes
@@ -86,10 +88,13 @@ class AllocationTrackerNaive(AllocationTracker):
         ----------
         """
         tracking = dict()
-        for cpu, vm_list in self.generic_tracking.items():
-            tracking[cpu] = 1
-            for vm in vm_list: tracking[cpu]-= (1/vm.get_cpu_ratio())
-            if tracking[cpu] < 0: raise ValueError('cpu', cpu, 'does not respect VM oversubscription constraints')
+        for cpuid, vm_list in self.generic_tracking.items():
+            strictest_ratio = math.inf
+            for vm in vm_list: 
+                if (vm.get_cpu_ratio() < strictest_ratio): strictest_ratio = vm.get_cpu_ratio()
+            number_of_vm = len(vm_list)
+            if number_of_vm > strictest_ratio: raise ValueError('cpu', cpuid, 'does not respect VM oversubscription constraints')
+            tracking[cpuid] = (strictest_ratio - number_of_vm)/strictest_ratio
         return tracking
 
 class AllocationTrackerPooled(AllocationTracker):
