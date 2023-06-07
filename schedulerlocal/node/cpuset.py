@@ -1,8 +1,8 @@
-from json import JSONEncoder, dumps, load
+from json import loads
 
 class ServerCpu(object):
     """
-    A class used to represent a CPU
+    A class used to represent a single CPU topology
     ...
 
     Attributes
@@ -119,38 +119,12 @@ class ServerCpu(object):
         """
         return 'cpu' + str(self.get_cpu_id()) +\
             ' ' + str(self.get_max_freq()/1000) + 'Mhz' +\
-            ' on numa node ' + str(self.get_numa_node()) +\
+            ' on numa node ' + str(seServerCpuSetf.get_numa_node()) +\
             ' with cache level id ' + str(self.get_cache_level()) + '\n'
-
-class ServerCpuSetEncoder(JSONEncoder):
-    """
-    Class to specify on to convert ServerCpuSet to JSON
-    ...
-
-    Public Methods
-    -------
-    default():
-        json conversion
-    """
-
-    def default(self, o):
-        """Implements Conversion strategy
-        ----------
-
-        Parameters
-        ----------
-        o : object
-            object to convert
-        """
-        if type(o) is not ServerCpuSet:
-            return
-        as_dict = dict(o.__dict__)
-        as_dict['cpu_list'] = [element.__dict__ for element in o.__dict__['cpu_list']]
-        return as_dict
 
 class ServerCpuSet(object):
     """
-    A class used to represent CPU configuration of a given node
+    A class used to represent CPU topology of a given node
     Proximity between CPU is considered based on a distance node
     ...
 
@@ -170,7 +144,7 @@ class ServerCpuSet(object):
     build_distances():
         Build relative distances of given cpuset
     dump_as_json():
-        build object attributes in json file
+        Dump current state as a json string
     load_from_json():
         load object attributes from json file
     Getter/Setter
@@ -210,38 +184,25 @@ class ServerCpuSet(object):
             self.distances[cpu.get_cpu_id()] = {k:v for k, v in sorted(single_cpu_distances.items(), key=lambda item: item[1])}
         return self
 
-    def dump_as_json(self, filename : str):
-        """Dump current state in a json file
+    def load_from_json(self, json : str):
+        """Instantiate attributes from a json str
         ----------
 
         Parameters
         ----------
-        filename : str
-            json file to write
-        """
-        with open(filename, 'w') as f: 
-            f.write(dumps(self, cls=ServerCpuSetEncoder))
-
-    def load_from_json(self, filename : str):
-        """Instantiate attributes from a json file
-        ----------
-
-        Parameters
-        ----------
-        filename : str
-            json file to read
+        json : str
+            json str to read
 
         Returns
         -------
         self : ServerCpuSet
             itself
         """
-        with open(filename, 'r') as f: 
-            raw_object = load(f)
-            self.numa_distances = {int(k):v for k,v in raw_object['numa_distances'].items()}
-            self.distances = {int(k):{int(kprime):vprime for kprime,vprime in v.items()} for k,v in raw_object['distances'].items()}
-            self.cpu_list = list()
-            for raw_cpu in raw_object['cpu_list']: self.cpu_list.append(ServerCpu(**raw_cpu))
+        raw_object = loads(json)['cpuset']
+        self.numa_distances = {int(k):v for k,v in raw_object['numa_distances'].items()}
+        self.distances = {int(k):{int(kprime):vprime for kprime,vprime in v.items()} for k,v in raw_object['distances'].items()}
+        self.cpu_list = list()
+        for raw_cpu in raw_object['cpu_list']: self.cpu_list.append(ServerCpu(**raw_cpu))
         return self
 
     def get_cpu_list(self):
@@ -269,7 +230,8 @@ class ServerCpuSet(object):
         self.numa_distances = numa_distances
 
     def get_distances(self):
-        """Return distances (empty dict if they werent previously build with build_distances() method)
+        """Return distances (raise an exception if werent previously build with build_distances() method)
         ----------
         """
+        if not self.distances: raise ValueError('Distances weren\'t previously build')
         return self.distances

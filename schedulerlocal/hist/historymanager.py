@@ -1,7 +1,7 @@
 from collections import defaultdict
 from influxdb_client import InfluxDBClient
-from influxdb_client.client.write_api import SYNCHRONOUS
-import json
+from dotenv import load_dotenv
+import os, json
 
 class HistoryManager(object):
     """
@@ -30,12 +30,18 @@ class HistoryManager(object):
 class InfluxDBHistoryManager(HistoryManager):
 
     def __init__(self, **kwargs):
-        req_attributes = ['url', 'token', 'org', 'bucket']
-        for req_attribute in req_attributes:
-            if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
-            setattr(self, req_attribute, kwargs[req_attribute])
-        self.client = InfluxDBClient(url=self.url, token=self.token, org=self.org)
-        self.query_api = self.client.query_api()
+        load_dotenv()
+        self.url    =  os.getenv('INFLUXDB_URL')
+        self.token  =  os.getenv('INFLUXDB_TOKEN')
+        self.org    =  os.getenv('INFLUXDB_ORG')
+        self.bucket =  os.getenv('INFLUXDB_BUCKET')
+        try:
+            self.client = InfluxDBClient(url=self.url, token=self.token, org=self.org)
+            self.query_api = self.client.query_api()
+        except Exception as ex:
+            print('An exception occured while trying to connect to InfluxDB, double check your parameters:')
+            print('url:', self.url, 'org:', self.org, 'token: [hidden]')
+            raise ex
 
     def get_data(self, begin_epoch : int, end_epoch : int):
         """TODO

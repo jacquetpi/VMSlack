@@ -4,6 +4,7 @@ class xmlObject(object):
     """
     Advanced Libvirt configuration relies sometimes on XML modification.
     xmlObject and its child classes allows to modify specific portion of a XML libvirt domain description
+    /!\ All XML modification must kept in mind that they will only take effect after a full reboot of targeted VM /!\
     ...
 
     Attributes

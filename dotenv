@@ -1,0 +1,7 @@
+##############
+#  influxdb  #
+##############
+INFLUXDB_URL="http://localhost:8086"
+INFLUXDB_TOKEN="token_value"
+INFLUXDB_ORG="org"
+INFLUXDB_BUCKET="bucket"

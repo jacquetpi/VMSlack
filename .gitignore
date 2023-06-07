@@ -2,7 +2,8 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,venv,jupyternotebooks
 
 # Misc
-debug/cpuset_local.json
+.subsettracker.py
+debug/topology_local.json
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks

@@ -1,11 +1,11 @@
 import re
 from os import listdir
 from os.path import isfile, join, exists
-from schedulerlocal.node.servercpuset import ServerCpu, ServerCpuSet
+from schedulerlocal.node.cpuset import ServerCpu, ServerCpuSet
 
-class NumaExplorer:
+class CpuExplorer:
     """
-    A class used to retrieve Numa information of host
+    A class used to retrieve CPU topology
     ...
 
     Attributes
@@ -17,8 +17,8 @@ class NumaExplorer:
 
     Public Methods
     -------
-    explore():
-       Test if a VM verify this workload profile constraints
+    build_cpuset():
+       Build a ServerCpuSet object from linux filesystem data
     """
 
     def __init__(self, **kwargs):
