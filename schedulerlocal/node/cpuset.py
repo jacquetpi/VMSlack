@@ -119,8 +119,8 @@ class ServerCpu(object):
         """
         return 'cpu' + str(self.get_cpu_id()) +\
             ' ' + str(self.get_max_freq()/1000) + 'Mhz' +\
-            ' on numa node ' + str(seServerCpuSetf.get_numa_node()) +\
-            ' with cache level id ' + str(self.get_cache_level()) + '\n'
+            ' on numa node ' + str(self.get_numa_node()) +\
+            ' with cache level id ' + str(self.get_cache_level())
 
 class ServerCpuSet(object):
     """
@@ -147,7 +147,7 @@ class ServerCpuSet(object):
         Dump current state as a json string
     load_from_json():
         load object attributes from json file
-    Getter/Setter
+    Getter/SetterList of available CPU ordered by their distance
     """
 
     def __init__(self, **kwargs):
@@ -235,3 +235,22 @@ class ServerCpuSet(object):
         """
         if not self.distances: raise ValueError('Distances weren\'t previously build')
         return self.distances
+
+    def get_distance_between_cpus(self, cpu0 : ServerCpu, cpu1 : ServerCpu):
+        """Retrieve the distance between two ServerCpu objects
+        ----------
+
+        Parameters
+        ----------
+        cpu0 : ServerCpu
+            The first CPU
+        cpu1 : ServerCpu
+            The second CPU
+
+        Returns
+        -------
+        Distance : int
+            Distance between two CPUs
+        """
+        if not self.distances: raise ValueError('Distances weren\'t previously build')
+        return self.distances[cpu0.get_cpu_id()][cpu1.get_cpu_id()]

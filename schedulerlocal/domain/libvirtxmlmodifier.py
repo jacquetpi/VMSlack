@@ -327,7 +327,7 @@ class xmlDomainNuma(xmlObject):
         ----------
         """
         return ' '.join([attribute + ':' + str(self.topology[attribute]) for attribute in self._topology_attributes]) + '\n' +\
-             ''.join(['  ' + numa_cell.__str__() for numa_cell in self.numa_cells])
+             ''.join(['  ' + str(numa_cell) for numa_cell in self.numa_cells])
 
 class xmlDomainMetaData(xmlObject):
     """
