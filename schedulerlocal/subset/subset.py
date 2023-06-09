@@ -1,5 +1,5 @@
+from schedulerlocal.subset.subsetoversubscription import SubsetOversubscription, SubsetOversubscriptionStatic
 from schedulerlocal.domain.domainentity import DomainEntity
-from math import ceil, floor
 
 class Subset(object):
     """
@@ -31,16 +31,13 @@ class Subset(object):
         Count resources in subset
     """
     def __init__(self, **kwargs):
-        req_attributes = ['oversubscription']
-        for req_attribute in req_attributes:
-            if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
-            setattr(self, req_attribute, kwargs[req_attribute])
+        self.oversubscription = SubsetOversubscriptionStatic(subset=self, ratio=kwargs['oversubscription'] )
         opt_attributes = ['res_list', 'consumer_list']
         for opt_attribute in opt_attributes:
             opt_val = kwargs[opt_attribute] if opt_attribute in kwargs else list()
             setattr(self, opt_attribute, opt_val)
 
-    def get_id(self):
+    def get_oversubscription_id(self):
         """Get subset id
         ----------
 
@@ -49,7 +46,7 @@ class Subset(object):
         id : float
             Oversubscription as ID
         """
-        return self.oversubscription
+        return self.oversubscription.get_id()
 
     def add_res(self, res):
         """Add a resource to subset
@@ -155,14 +152,7 @@ class Subset(object):
         missing : int
             number of missing physical resources
         """
-        request    = self.get_vm_allocation(vm) # Without oversubscription
-        capacity   = self.get_capacity() # Without oversubscription
-        if capacity < request:
-            return ceil(request-capacity) # otherwise, VM will be oversubscribed with itself
-        available_oversubscribed = self.get_available_oversubscribed()
-        missing_oversubscribed   = (request - available_oversubscribed)
-        missing_physical = ceil(missing_oversubscribed/self.oversubscription) if missing_oversubscribed > 0 else 0
-        return missing_physical
+        return self.oversubscription.get_additional_res_count_required_for_vm(vm)
 
     def unused_resources_count(self):
         """Return the number of resource unused
@@ -173,30 +163,7 @@ class Subset(object):
         unused : int
             count of unused resources
         """
-        available_oversubscribed = self.get_available_oversubscribed()
-        unused_cpu = floor(available_oversubscribed/self.oversubscription)
-
-        used_cpu = self.get_capacity() - unused_cpu
-        max_alloc = self.get_max_consumer_allocation()
-        if used_cpu < max_alloc:
-             # Specific case: our unused count floor is the maximum configuration observed
-             # Avoid VM to be oversubscribed with themselves
-            return max(0, floor(self.get_capacity()-max_alloc))
-    
-        # Generic case
-        return unused_cpu
-
-    def get_available_oversubscribed(self):
-        """Return the number of resource unused
-        ----------
-
-        Returns
-        -------
-        unused : int
-            count of unused resources
-        """
-        return (self.get_capacity()*self.oversubscription) - self.get_allocation()
-    
+        return self.oversubscription.unused_resources_count()
 
     def get_allocation(self):
         """Return allocation of subset (number of resources requested without oversubscription consideration)
@@ -262,7 +229,7 @@ class Subset(object):
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on resources. Resource dependant. Must be reimplemented with a super call
         """
-        available_oversubscribed = (self.get_capacity()*self.oversubscription) - self.get_allocation()
+        available_oversubscribed = self.oversubscription.get_available()
         if available_oversubscribed < self.get_vm_allocation(vm): 
             print('Warning: Not enough resources available to deploy', vm.get_name())
             return False

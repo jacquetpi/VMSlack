@@ -630,15 +630,6 @@ class SubsetManagerPool(object):
             print('Deployement', vm.get_name(), success)
             self.vm_list.append(vm)
 
-        print(self)
-        print(self.remove(self.vm_list[2]))
-        print(self)
-        print(self.remove(self.vm_list[1]))
-        print(self)
-        print(self.remove(self.vm_list[0]))
-        print(self)
-
-
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on subset managers
         ----------
@@ -655,7 +646,7 @@ class SubsetManagerPool(object):
         """
 
         # For testing purposes only
-        if 'alpine' in vm.get_name():
+        if 'alpinelinux3.14-2' in vm.get_name():
             setattr(vm, 'cpu_ratio', 2)
             print('changing oc', vm.get_cpu_ratio())
 
@@ -681,8 +672,6 @@ class SubsetManagerPool(object):
         success : bool
             Return success status of operation
         """
-
-
         mem_success = self.mem_subset_manager.remove(vm)
         if not mem_success: return False
         cpu_success = self.cpu_subset_manager.remove(vm)
