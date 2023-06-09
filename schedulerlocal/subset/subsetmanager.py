@@ -535,9 +535,10 @@ class SubsetManagerPool(object):
 
     def deploy(self, vm : DomainEntity):
         print('Deploy', vm.get_name())
-        print(self.cpu_subset_manager.deploy(vm))
-        print(self.mem_subset_manager.deploy(vm))
-
+        print('Deployment on CPU', self.cpu_subset_manager.deploy(vm))
+        print('Deployment on mem', self.mem_subset_manager.deploy(vm))
+        print('')
+        
     def iterate(self):
         print(self.cpu_subset_manager)
         print(self.mem_subset_manager)

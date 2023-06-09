@@ -94,7 +94,7 @@ class Subset(object):
         consumer : object
             The consumer to add
         """
-        if consumer in self.consumer_list: raise ValueError('Cannot add twice a consumer', res)
+        if consumer in self.consumer_list: raise ValueError('Cannot add twice a consumer', consumer)
         self.consumer_list.append(consumer)
 
     def remove_consumer(self, consumer):
@@ -202,12 +202,13 @@ class Subset(object):
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on resources. Resource dependant. Must be reimplemented with a super call
-        Raise an exception if not enough resources are available
         """
         available_oversubscribed = (self.get_capacity()-self.get_allocation())*self.oversubscription
         if available_oversubscribed < self.get_vm_allocation(vm): 
-            raise ValueError('Not enough resources available to deploy', vm.get_name())
+            print('Warning: Not enough resources available to deploy', vm.get_name())
+            return False
         self.add_consumer(vm)
+        return True
 
 class SubsetCollection(object):
     """
@@ -374,8 +375,9 @@ class CpuSubset(Subset):
         vm : DomainEntity
             The VM to consider
         """
-        super().deploy(vm) 
+        success = super().deploy(vm) 
         # Update vm pinning
+        return success
 
     def __str__(self):
         return 'CpuSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\
@@ -435,10 +437,11 @@ class MemSubset(Subset):
         vm : DomainEntity
             The VM to consider
         """
-        super().deploy(vm)
+        success = super().deploy(vm)
         # Nothing special to do on memory with libvirt
+        return success
 
     def __str__(self):
         return 'MemSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\
-            ' res:' + str(['[' + str(mem_tuple[0]) + ';' + str(mem_tuple[1]) + ']' for mem_tuple in self.get_res()]) +\
+            ' res:' + str([str(mem_tuple[0]) + ':' + str(mem_tuple[1]) for mem_tuple in self.get_res()]) +\
             ' vm:' + str([vm.get_name() for vm in self.get_consumers()])
