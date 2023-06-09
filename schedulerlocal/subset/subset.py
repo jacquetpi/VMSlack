@@ -1,5 +1,5 @@
 from schedulerlocal.domain.domainentity import DomainEntity
-from math import ceil
+from math import ceil, floor
 
 class Subset(object):
     """
@@ -39,6 +39,17 @@ class Subset(object):
         for opt_attribute in opt_attributes:
             opt_val = kwargs[opt_attribute] if opt_attribute in kwargs else list()
             setattr(self, opt_attribute, opt_val)
+
+    def get_id(self):
+        """Get subset id
+        ----------
+
+        Return
+        ----------
+        id : float
+            Oversubscription as ID
+        """
+        return self.oversubscription
 
     def add_res(self, res):
         """Add a resource to subset
@@ -146,13 +157,46 @@ class Subset(object):
         """
         request    = self.get_vm_allocation(vm) # Without oversubscription
         capacity   = self.get_capacity() # Without oversubscription
-        allocation = self.get_allocation()   # Without oversubscription
         if capacity < request:
             return ceil(request-capacity) # otherwise, VM will be oversubscribed with itself
-        available_oversubscribed = (capacity-allocation)*self.oversubscription
+        available_oversubscribed = self.get_available_oversubscribed()
         missing_oversubscribed   = (request - available_oversubscribed)
         missing_physical = ceil(missing_oversubscribed/self.oversubscription) if missing_oversubscribed > 0 else 0
         return missing_physical
+
+    def unused_resources_count(self):
+        """Return the number of resource unused
+        ----------
+
+        Returns
+        -------
+        unused : int
+            count of unused resources
+        """
+        available_oversubscribed = self.get_available_oversubscribed()
+        unused_cpu = floor(available_oversubscribed/self.oversubscription)
+
+        used_cpu = self.get_capacity() - unused_cpu
+        max_alloc = self.get_max_consumer_allocation()
+        if used_cpu < max_alloc:
+             # Specific case: our unused count floor is the maximum configuration observed
+             # Avoid VM to be oversubscribed with themselves
+            return max(0, floor(self.get_capacity()-max_alloc))
+    
+        # Generic case
+        return unused_cpu
+
+    def get_available_oversubscribed(self):
+        """Return the number of resource unused
+        ----------
+
+        Returns
+        -------
+        unused : int
+            count of unused resources
+        """
+        return (self.get_capacity()*self.oversubscription) - self.get_allocation()
+    
 
     def get_allocation(self):
         """Return allocation of subset (number of resources requested without oversubscription consideration)
@@ -189,6 +233,21 @@ class Subset(object):
         """
         raise NotImplementedError()
 
+    def get_max_consumer_allocation(self):
+        """Return the highest allocation between consumers
+        Allocation : number of resources requested, without oversubscription consideration
+        ----------
+
+        Returns
+        -------
+        allocation : int
+            Number of resources requested by the VM
+        """
+        max_allocation = 0
+        for consumer in self.consumer_list: 
+            if max_allocation < self.get_vm_allocation(consumer): max_allocation = self.get_vm_allocation(consumer)
+        return max_allocation
+
     def get_capacity(self):
         """Return subset resource capacity. Resource dependant. Must be reimplemented
         Capacity : number of resources which can be used by VM
@@ -203,7 +262,7 @@ class Subset(object):
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on resources. Resource dependant. Must be reimplemented with a super call
         """
-        available_oversubscribed = (self.get_capacity()-self.get_allocation())*self.oversubscription
+        available_oversubscribed = (self.get_capacity()*self.oversubscription) - self.get_allocation()
         if available_oversubscribed < self.get_vm_allocation(vm): 
             print('Warning: Not enough resources available to deploy', vm.get_name())
             return False
@@ -269,6 +328,12 @@ class SubsetCollection(object):
         if id not in self.subset_dict: raise ValueError('Subset id does not exist')
         return self.subset_dict[id]
 
+    def get_subsets(self):
+        """Get subsets list
+        ----------
+        """
+        return self.subset_dict.values()
+
     def contains_subset(self, id : float):
         """Check if specified subset id exists
         ----------
@@ -318,7 +383,7 @@ class SubsetCollection(object):
         return res
 
     def __str__(self):
-        return ''.join([str(v) for v in self.subset_dict.values()])
+        return ''.join(['|_>' + str(v) + '\n' for v in self.subset_dict.values()])
 
 class CpuSubset(Subset):
     """
@@ -332,7 +397,7 @@ class CpuSubset(Subset):
     """
 
     def __init__(self, **kwargs):
-        additional_attributes = []
+        additional_attributes = ['connector']
         for req_attribute in additional_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', additional_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -377,7 +442,16 @@ class CpuSubset(Subset):
         """
         success = super().deploy(vm) 
         # Update vm pinning
+        self.sync_pinning()
         return success
+
+    def sync_pinning(self):
+        """Synchronize VM pinning to CPU according to the current ServerCPU list
+        ----------
+        """
+        cpuid_list = [cpu.get_cpu_id() for cpu in self.res_list]
+        for consumer in self.consumer_list:
+            self.connector.update_cpu_pinning(vm_uuid=consumer.get_uuid(), cpuid_list=cpuid_list)
 
     def __str__(self):
         return 'CpuSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\

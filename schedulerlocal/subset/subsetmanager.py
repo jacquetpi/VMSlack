@@ -42,6 +42,27 @@ class SubsetManager(object):
             return self.__try_to_deploy_on_existing_subset(vm)
         return self.__try_to_deploy_on_new_subset(vm)
 
+    def remove(self, vm : DomainEntity):
+        """Remove a VM
+        ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        success : bool
+            Return success status of operation
+        """
+        subset_id = self.get_appropriate_id(vm)
+        if not self.collection.contains_subset(subset_id): return False
+        subset = self.collection.get_subset(subset_id)
+        subset.remove_consumer(vm)
+        self.shrink_subset(subset)
+        return True
+
     def __try_to_deploy_on_existing_subset(self,  vm : DomainEntity):
         """Try to deploy a VM to an existing subset by extending it if required 
         ----------
@@ -128,14 +149,55 @@ class SubsetManager(object):
     def get_appropriate_id(self, vm : DomainEntity):
         """For a given VM, a subset ID typically corresponds to its premium policy. Must be reimplemented
         ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        subset_id : float
+            premium policy
         """
         raise NotImplementedError()
 
     def get_request(self, vm : DomainEntity):
         """For a given VM, return its resource request. Resource dependant. Must be reimplemented
         ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        request : int
+            VM resource request
         """
         raise NotImplementedError()
+
+
+    def shrink(self):
+        """Reduce subset capacity based on current allocation
+        ----------
+        """
+        for subset in self.collection.get_subsets(): self.shrink_subset(subset)
+
+    def shrink_subset(self, subset : Subset = None):
+        """Reduce subset capacity based on current allocation. Resource dependant. Must be reimplemented
+        ----------
+
+        Parameters
+        ----------
+        subset : Subset
+            The subset to shrink
+        """
+        # Must be reimplemented
+        if (subset.count_res() == 0) and (subset.count_consumer() ==0):
+            self.collection.remove_subset(subset.get_id())
+            del subset
 
 class CpuSubsetManager(SubsetManager):
     """
@@ -153,7 +215,7 @@ class CpuSubsetManager(SubsetManager):
         Deploy a VM to the appropriate CPU subset
     """
     def __init__(self, **kwargs):
-        req_attributes = ['cpuset', 'distance_max']
+        req_attributes = ['cpuset', 'distance_max', 'connector']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -182,7 +244,7 @@ class CpuSubsetManager(SubsetManager):
         available_cpus_ordered = self.__get_farthest_available_cpus()
         if len(available_cpus_ordered) < initial_capacity: return None
         starting_cpu = available_cpus_ordered[0]
-        cpu_subset = CpuSubset(oversubscription=oversubscription)
+        cpu_subset = CpuSubset(oversubscription=oversubscription, connector=self.connector)
         cpu_subset.add_res(starting_cpu)
 
         initial_capacity-=1 # One was attributed
@@ -308,6 +370,22 @@ class CpuSubsetManager(SubsetManager):
             if cpu not in allocated_cpu_list: available_cpu_list.append(cpu)
         return available_cpu_list
 
+    def shrink_subset(self, subset : CpuSubset):
+        """Reduce subset capacity based on current allocation
+        ----------
+
+        Parameters
+        ----------
+        subset : Subset
+            The subset to shrink
+        """
+        unused = subset.unused_resources_count()
+        res_list = list(subset.get_res())
+        last_index = len(res_list) - 1
+        for count in range(unused): subset.remove_res(res_list[last_index-count])
+        subset.sync_pinning()
+        super().shrink_subset(subset)
+
     def get_appropriate_id(self, vm : DomainEntity):
         """For a given VM, get its appropriate subset ID (corresponds to its premium policy)
         ----------
@@ -341,7 +419,7 @@ class CpuSubsetManager(SubsetManager):
         return vm.get_cpu()
 
     def __str__(self):
-        return 'CPUSubsetManager: ' +  str(self.collection)
+        return 'CPUSubsetManager:\n' +  str(self.collection)
 
 class MemSubsetManager(SubsetManager):
     """
@@ -469,6 +547,21 @@ class MemSubsetManager(SubsetManager):
             if overlap>0: return False
         return True
 
+    def shrink_subset(self, subset : MemSubset = None):
+        """Reduce subset capacity based on current allocation
+        ----------
+
+        Parameters
+        ----------
+        subset : Subset (opt)
+            The subset to shrink(if not specified, all subset will be shrinked)
+        """
+        unused = subset.unused_resources_count()
+        initial_tuple = subset.get_res()[0]
+        subset.remove_res(initial_tuple)
+        if unused < initial_tuple[1]: subset.add_res((initial_tuple[0], initial_tuple[1]-unused))
+        super().shrink_subset(subset)
+
     def get_appropriate_id(self, vm : DomainEntity):
         """For a given VM, get its appropriate subset ID (corresponds to its premium policy)
         ----------
@@ -502,7 +595,7 @@ class MemSubsetManager(SubsetManager):
         return vm.get_mem(as_kb=False) # in MB
 
     def __str__(self):
-        return 'MemSubsetManager: ' +  str(self.collection)
+        return 'MemSubsetManager:\n' +  str(self.collection)
 
 class SubsetManagerPool(object):
     """
@@ -531,14 +624,74 @@ class SubsetManagerPool(object):
             setattr(self, req_attribute, kwargs[req_attribute])
         self.cpu_subset_manager = CpuSubsetManager(connector=self.connector, cpuset=self.cpuset, distance_max=50)
         self.mem_subset_manager = MemSubsetManager(connector=self.connector, memset=self.memset)
-        for vm in self.connector.get_vm_alive_as_entity(): self.deploy(vm) # Treat pre-existing VM as deployment
+        self.vm_list = list()
+        for vm in self.connector.get_vm_alive_as_entity(): 
+            success = self.deploy(vm) # Treat pre-existing VM as deployment
+            print('Deployement', vm.get_name(), success)
+            self.vm_list.append(vm)
+
+        print(self)
+        print(self.remove(self.vm_list[2]))
+        print(self)
+        print(self.remove(self.vm_list[1]))
+        print(self)
+        print(self.remove(self.vm_list[0]))
+        print(self)
+
 
     def deploy(self, vm : DomainEntity):
-        print('Deploy', vm.get_name())
-        print('Deployment on CPU', self.cpu_subset_manager.deploy(vm))
-        print('Deployment on mem', self.mem_subset_manager.deploy(vm))
-        print('')
+        """Deploy a VM on subset managers
+        ----------
         
+        Parameters
+        ----------
+        vm : DomainEntity
+            The VM to deploy
+
+        Returns
+        -------
+        success : bool
+            Return success status of operation
+        """
+
+        # For testing purposes only
+        if 'alpine' in vm.get_name():
+            setattr(vm, 'cpu_ratio', 2)
+            print('changing oc', vm.get_cpu_ratio())
+
+        mem_success = self.mem_subset_manager.deploy(vm)
+        if not mem_success: return False
+        cpu_success = self.cpu_subset_manager.deploy(vm)
+        if not cpu_success:
+            self.mem_subset_manager.remove(vm)
+            return False
+        return True
+
+    def remove(self, vm : DomainEntity):
+        """Remove a VM from subset managers
+        ----------
+        
+        Parameters
+        ----------
+        vm : DomainEntity
+            The VM to deploy
+
+        Returns
+        -------
+        success : bool
+            Return success status of operation
+        """
+
+
+        mem_success = self.mem_subset_manager.remove(vm)
+        if not mem_success: return False
+        cpu_success = self.cpu_subset_manager.remove(vm)
+        if not cpu_success: raise ValueError('Invalid configuration encountered')
+        return True
+
     def iterate(self):
         print(self.cpu_subset_manager)
         print(self.mem_subset_manager)
+
+    def __str__(self):
+        return str(self.cpu_subset_manager) + '\n' + str(self.mem_subset_manager) + '\n'

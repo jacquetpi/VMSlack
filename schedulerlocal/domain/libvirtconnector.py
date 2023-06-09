@@ -97,7 +97,7 @@ class LibvirtConnector(object):
             domain as DomainEntity object
         """
         # Cache management
-        uuid = virDomain.UUID()
+        uuid = virDomain.UUIDString()
         if (not force_update) and uuid in self.cache_entity: return self.cache_entity[uuid]
         # General info
         name = virDomain.name()
@@ -114,6 +114,34 @@ class LibvirtConnector(object):
         # Build entity
         self.cache_entity[uuid] = DomainEntity(uuid=uuid, name=name, mem=mem, cpu=cpu, cpu_pin=cpu_pin, cpu_ratio=cpu_ratio)
         return self.cache_entity[uuid]
+
+    def update_cpu_pinning(self, vm_uuid : str, cpuid_list : list):
+        """Update the pinning of a VM (identified by its uuid) to the list of cpuid if required
+        ----------
+
+        Parameters
+        ----------
+        vm_uuid : str
+            VM identifier
+        cpuid_list : list
+            list of CPUID
+        """
+        # Retrieve VM
+        virDomain = self.conn.lookupByUUIDString(vm_uuid)
+        vm_pin       = virDomain.vcpuPinInfo()
+        # Build template
+        template_pin = [False for is_cpu_pinned in vm_pin[0]]
+        for cpuid in cpuid_list: template_pin[cpuid] = True
+        template_pin = tuple(template_pin)
+        # Test if update is needed
+        update_needed = False
+        for vcpu_pin in vm_pin:
+            if vcpu_pin != template_pin: 
+                update_needed = True
+                break
+        # Update
+        if update_needed: 
+            for vcpu in range(len(vm_pin)): virDomain.pinVcpu(vcpu, template_pin)
 
     def cache_purge(self):
         """Purge cache associating VM uuid to their domainentity representation
