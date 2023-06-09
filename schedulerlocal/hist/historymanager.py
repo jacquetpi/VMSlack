@@ -41,6 +41,7 @@ class InfluxDBHistoryManager(HistoryManager):
         except Exception as ex:
             print('An exception occured while trying to connect to InfluxDB, double check your parameters:')
             print('url:', self.url, 'org:', self.org, 'token: [hidden]')
+            print('Full stack trace is:\n')
             raise ex
 
     def get_data(self, begin_epoch : int, end_epoch : int):
