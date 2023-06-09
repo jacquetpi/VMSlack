@@ -181,8 +181,9 @@ class CpuSubsetManager(SubsetManager):
         # Starting point
         available_cpus_ordered = self.__get_farthest_available_cpus()
         if len(available_cpus_ordered) < initial_capacity: return None
+        starting_cpu = available_cpus_ordered[0]
         cpu_subset = CpuSubset(oversubscription=oversubscription)
-        cpu_subset.add_res(available_cpus_ordered[0])
+        cpu_subset.add_res(starting_cpu)
 
         initial_capacity-=1 # One was attributed
         if initial_capacity>0:
@@ -272,8 +273,11 @@ class CpuSubsetManager(SubsetManager):
             total_distance = 0
             total_count = 0
 
+            exclude_identical = False
             for subset_cpu in to_list: 
-                if subset_cpu == available_cpu: continue
+                if subset_cpu == available_cpu: 
+                    exclude_identical = True
+                    break
 
                 distance = self.cpuset.get_distance_between_cpus(subset_cpu, available_cpu)
                 if exclude_max and (distance >= self.distance_max): 
@@ -283,7 +287,9 @@ class CpuSubsetManager(SubsetManager):
                 total_distance+=distance
                 total_count+=1
 
-            if total_count > 0 and total_distance>=0: computed_distances[available_cpu.get_cpu_id()] = 0
+            if exclude_identical : continue
+            if total_count <= 0: computed_distances[available_cpu.get_cpu_id()] = 0
+            elif total_distance>=0: computed_distances[available_cpu.get_cpu_id()] = total_distance/total_count
 
         return computed_distances
 
@@ -386,6 +392,7 @@ class MemSubsetManager(SubsetManager):
         if not self.__check_overlap(new_tuple=new_tuple): return None
 
         mem_subset = MemSubset(oversubscription=oversubscription)
+
         mem_subset.add_res(new_tuple)
         return mem_subset
 
@@ -406,9 +413,10 @@ class MemSubsetManager(SubsetManager):
             Return success status of operation
         """
         initial_tuple = subset.get_res()[0]
+        
         bound_inf, bound_sup = initial_tuple
         new_tuple = (bound_inf, bound_sup+amount)
-
+        
         success = self.__check_capacity_bound(bounds=new_tuple) 
         if not success: return False
 
@@ -416,7 +424,7 @@ class MemSubsetManager(SubsetManager):
         if not success: return False
         
         subset.remove_res(initial_tuple)
-        subset.add_res((bound_inf, bound_sup))
+        subset.add_res(new_tuple)
         return True
 
     def __check_capacity_bound(self, bounds : tuple):
@@ -434,7 +442,6 @@ class MemSubsetManager(SubsetManager):
             True if host capacity handles extension. False otherwise.
         """
         host_capacity = self.memset.get_allowed()
-        # First check, do not exceed capacity
         if bounds[0] < 0 : return False
         if bounds[1] > host_capacity: return False
         return True
@@ -455,9 +462,9 @@ class MemSubsetManager(SubsetManager):
         res : boolean
             True if overlap, false otherwise.
         """
-        for other_subset in self.collection:
-            other_tuple = other_subset.get_res()[0]
+        for other_tuple in self.collection.get_res():
             if other_tuple == initial_tuple: continue
+            print(other_tuple, new_tuple)
             overlap = max(0, min(new_tuple[1], other_tuple[1]) - max(new_tuple[0], other_tuple[0]))
             if overlap>0: return False
         return True
@@ -492,7 +499,7 @@ class MemSubsetManager(SubsetManager):
         mem : int
             Memory request of given VM
         """
-        return vm.get_mem()
+        return vm.get_mem(as_kb=False) # in MB
 
     def __str__(self):
         return 'MemSubsetManager: ' +  str(self.collection)
@@ -533,4 +540,4 @@ class SubsetManagerPool(object):
 
     def iterate(self):
         print(self.cpu_subset_manager)
-        #print('memset', getattr(self.mem_subset_manager, 'collection').count_subset())
+        print(self.mem_subset_manager)

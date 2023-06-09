@@ -206,7 +206,7 @@ class Subset(object):
         """
         available_oversubscribed = (self.get_capacity()-self.get_allocation())*self.oversubscription
         if available_oversubscribed < self.get_vm_allocation(vm): 
-            raise ValueError('Not enough resources availablle to deploy', vm.get_name())
+            raise ValueError('Not enough resources available to deploy', vm.get_name())
         self.add_consumer(vm)
 
 class SubsetCollection(object):
@@ -216,7 +216,7 @@ class SubsetCollection(object):
 
     Attributes
     ----------
-    subset_list : list
+    subset_dict : list
         List of subsets
 
     Public Methods
@@ -254,7 +254,7 @@ class SubsetCollection(object):
             The subset id to remove
         """
         if id not in self.subset_dict: raise ValueError('Subset id does not exist')
-        self.subset_list.remove(id)
+        del self.subset_dict[id]
 
     def get_subset(self, id : float):
         """Get a subset from collection
@@ -266,7 +266,7 @@ class SubsetCollection(object):
             The subset id to get
         """
         if id not in self.subset_dict: raise ValueError('Subset id does not exist')
-        self.subset_list.remove(id)
+        return self.subset_dict[id]
 
     def contains_subset(self, id : float):
         """Check if specified subset id exists
@@ -313,7 +313,7 @@ class SubsetCollection(object):
             subset resources concatened
         """
         res = list()
-        for subset in self.subset_dict.values(): res.l(self.subset().get_res())
+        for subset in self.subset_dict.values(): res.extend(subset.get_res())
         return res
 
     def __str__(self):
@@ -409,7 +409,7 @@ class MemSubset(Subset):
         allocation : int
             Number of resources requested by the VM
         """
-        return vm.get_mem()
+        return vm.get_mem(as_kb=False) # in MB
 
     def get_capacity(self):
         """Return subset memory capacity.
@@ -421,7 +421,7 @@ class MemSubset(Subset):
             Subset Memory capacity
         """
         capacity = 0
-        for bound_inferior, bound_superior in self.res_list():
+        for bound_inferior, bound_superior in self.res_list:
             capacity += (bound_superior-bound_inferior) 
         return capacity
 
@@ -440,5 +440,5 @@ class MemSubset(Subset):
 
     def __str__(self):
         return 'MemSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\
-            ' res:' + str(['[' + mem_tuple[0] + ';' + mem_tuple[1] + ']' for mem_tuple in self.get_res()]) +\
+            ' res:' + str(['[' + str(mem_tuple[0]) + ';' + str(mem_tuple[1]) + ']' for mem_tuple in self.get_res()]) +\
             ' vm:' + str([vm.get_name() for vm in self.get_consumers()])

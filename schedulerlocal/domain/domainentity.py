@@ -41,11 +41,12 @@ class DomainEntity:
         """
         return self.name
 
-    def get_mem(self):
+    def get_mem(self, as_kb : bool = True):
         """Return mem allocation
         ----------
         """
-        return self.mem
+        if as_kb: return self.mem
+        return int(self.mem/1024) # as_mb
 
     def get_cpu(self):
         """Return CPU allocation

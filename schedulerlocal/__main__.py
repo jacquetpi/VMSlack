@@ -64,7 +64,7 @@ if __name__ == '__main__':
     scheduler_local = SchedulerLocal(cpuset=cpuset,\
                                     memset=memset,\
                                     connector=libvirt_connector,\
-                                    tick=2,\
+                                    tick=0.5,\
                                     debug_level=debug_level)
     try:
         scheduler_local.run()
