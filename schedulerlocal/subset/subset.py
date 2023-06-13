@@ -1,5 +1,6 @@
 from schedulerlocal.subset.subsetoversubscription import SubsetOversubscription, SubsetOversubscriptionStatic
 from schedulerlocal.domain.domainentity import DomainEntity
+from schedulerlocal.endpoint.endpointpool import EndpointPool
 
 class Subset(object):
     """
@@ -31,7 +32,8 @@ class Subset(object):
         Count resources in subset
     """
     def __init__(self, **kwargs):
-        self.oversubscription = SubsetOversubscriptionStatic(subset=self, ratio=kwargs['oversubscription'] )
+        self.oversubscription = SubsetOversubscriptionStatic(subset=self, ratio=kwargs['oversubscription'])
+        self.endpoint_pool = kwargs['endpoint_pool']
         opt_attributes = ['res_list', 'consumer_list']
         for opt_attribute in opt_attributes:
             opt_val = kwargs[opt_attribute] if opt_attribute in kwargs else list()
@@ -216,13 +218,33 @@ class Subset(object):
         return max_allocation
 
     def get_capacity(self):
-        """Return subset resource capacity. Resource dependant. Must be reimplemented
+        """Return subset physical resource capacity. Resource dependant. Must be reimplemented
         Capacity : number of resources which can be used by VM
 
         Returns
         -------
         capacity : int
             Subset resource capacity
+        """
+        raise NotImplementedError()
+
+    def get_usage(self):
+        """Get history of usage on physical resources from endpoint
+
+        Returns
+        -------
+        Usage : dict
+            data as dict
+        """
+        return self.endpoint_pool.load(self)
+
+    def get_current_usage(self):
+        """Get current usage of physical resources. Resource dependant. Must be reimplemented
+
+        Returns
+        -------
+        usage : int
+            Percentage [0:100]
         """
         raise NotImplementedError()
 
@@ -235,6 +257,18 @@ class Subset(object):
             return False
         self.add_consumer(vm)
         return True
+
+    def update_monitoring(self, timestamp : int):
+        """Order a monitoring session on current subset with specified timestamp key
+        Use endpoint_pool to load and store from the appropriate location
+        ----------
+
+        Parameters
+        ----------
+        timestamp : int
+            The timestamp key
+        """
+        self.endpoint_pool.load(timestamp=timestamp, subset=self)
 
 class SubsetCollection(object):
     """
@@ -349,6 +383,18 @@ class SubsetCollection(object):
         for subset in self.subset_dict.values(): res.extend(subset.get_res())
         return res
 
+    def update_monitoring(self, timestamp : int):
+        """Order a monitoring session on each subset with specified timestamp key
+        Use endpoint_pool to load and store from the appropriate location
+        ----------
+
+        Parameters
+        ----------
+        timestamp : int
+            The timestamp key
+        """
+        for subset in self.subset_dict.values(): subset.update_monitoring(timestamp=timestamp)
+
     def __str__(self):
         return ''.join(['|_>' + str(v) + '\n' for v in self.subset_dict.values()])
 
@@ -364,7 +410,7 @@ class CpuSubset(Subset):
     """
 
     def __init__(self, **kwargs):
-        additional_attributes = ['connector']
+        additional_attributes = ['connector', 'cpu_explorer']
         for req_attribute in additional_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', additional_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -388,7 +434,7 @@ class CpuSubset(Subset):
 
     def get_capacity(self):
         """Return subset CPU capacity.
-        Capacity : number of CPU which can be used by VM
+        Capacity : number of physical CPU which can be used by VM
 
         Returns
         -------
@@ -396,6 +442,16 @@ class CpuSubset(Subset):
             Subset CPU capacity
         """
         return self.count_res()
+
+    def get_current_usage(self):
+        """Get usage of physical CPU resources
+
+        Returns
+        -------
+        Usage : int
+            Percentage [0:100]
+        """
+        return self.cpu_explorer.get_usage(self.get_res())
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on CPU subset
@@ -410,6 +466,8 @@ class CpuSubset(Subset):
         success = super().deploy(vm) 
         # Update vm pinning
         self.sync_pinning()
+        # Reset CPU time used to compute usage
+        for server_cpu in self.res_list: server_cpu.clear_time()
         return success
 
     def sync_pinning(self):
@@ -437,7 +495,7 @@ class MemSubset(Subset):
     """
 
     def __init__(self, **kwargs):
-        additional_attributes = []
+        additional_attributes = ['mem_explorer']
         for req_attribute in additional_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', additional_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -456,7 +514,7 @@ class MemSubset(Subset):
 
     def get_capacity(self):
         """Return subset memory capacity.
-        Capacity : Amount of memory which can be used by VM
+        Capacity : Amount of physical memory which can be used by VM
 
         Returns
         -------
@@ -467,6 +525,16 @@ class MemSubset(Subset):
         for bound_inferior, bound_superior in self.res_list:
             capacity += (bound_superior-bound_inferior) 
         return capacity
+
+    def get_current_usage(self):
+        """Get usage of physical Memory resources
+
+        Returns
+        -------
+        Usage : int
+            Percentage [0:100]
+        """
+        return self.mem_explorer.get_usage(self.get_res())
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on memory subset

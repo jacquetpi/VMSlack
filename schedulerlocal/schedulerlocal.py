@@ -25,13 +25,14 @@ class SchedulerLocal:
         ----------
 
         """
+        iteration_count = 0
         while True:
             time_begin = time.time_ns()
-            self.__iteration()
+            self.__iteration(time_since_launch=iteration_count*(self.delay))
             time_to_sleep = (self.delay*10**9) - (time.time_ns() - time_begin)
             if time_to_sleep>0: time.sleep(time_to_sleep/10**9)
         
-    def __iteration(self):
+    def __iteration(self, time_since_launch : int):
         """Execute all actions related to an iteration
         ----------
 
@@ -40,4 +41,4 @@ class SchedulerLocal:
         # Track VM usage
         # Mitigate perf?
         # Compute free resources if updated
-        self.managers_pool.iterate()
+        self.managers_pool.iterate(timestamp=time_since_launch)

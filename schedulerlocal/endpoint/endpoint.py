@@ -2,10 +2,13 @@ from collections import defaultdict
 from influxdb_client import InfluxDBClient
 from dotenv import load_dotenv
 import os, json
+from schedulerlocal.subset.subset import Subset
+from schedulerlocal.node.cpuexplorer import CpuExplorer
+from schedulerlocal.node.memoryexplorer import MemoryExplorer
 
-class HistoryManager(object):
+class Endpoint(object):
     """
-    An History manager is a class charged to retrieve history data 
+    An Endpoint is a class charged to store or retrieve subset data 
     Abstract class
     ...
 
@@ -15,19 +18,43 @@ class HistoryManager(object):
         todo
     """
 
-    def get_data(self):
+    def load(self, timestamp : int, subset : Subset):
         """Return available resources. Must be reimplemented
         ----------
         """
         raise NotImplementedError()
 
-    def put_data(self):
+    def store(self):
         """Return available resources. Must be reimplemented
         ----------
         """
         raise NotImplementedError()
 
-class InfluxDBHistoryManager(HistoryManager):
+class EndpointLive(Endpoint):
+    """
+    A live endpoint load data from the live system. It cannot store data
+    ...
+
+    Public Methods
+    -------
+    todo()
+        todo
+    """
+        
+    def load(self, timestamp : int, subset : Subset):
+        usage = subset.get_current_usage() # Use subset specific connector and/or explorer
+        return usage
+
+class EndpointInfluxDB(Endpoint):
+    """
+    An InfluxDB endpoint store and load data from InfluxDB
+    ...
+
+    Public Methods
+    -------
+    todo()
+        todo
+    """
 
     def __init__(self, **kwargs):
         load_dotenv()
@@ -44,7 +71,7 @@ class InfluxDBHistoryManager(HistoryManager):
             print('Full stack trace is:\n')
             raise ex
 
-    def get_data(self, begin_epoch : int, end_epoch : int):
+    def load(self, begin_epoch : int, end_epoch : int):
         """TODO
         ----------
         """
@@ -65,16 +92,15 @@ class InfluxDBHistoryManager(HistoryManager):
                 domains_data[domain_name][record.get_field()].append(record.get_value())
         return domains_data
 
-    def put_data():
+    def store():
         """TODO
         ----------
         """
         return 'todo'
 
-class OneShotJSONBHistoryManager(HistoryManager):
+class EndpointCSV(Endpoint):
     """
-    An History manager is a class charged to retrieve history data 
-    Abstract class
+    A CSV endpoint store and load data from a CSV file
     ...
 
     Public Methods
@@ -84,7 +110,7 @@ class OneShotJSONBHistoryManager(HistoryManager):
     """
 
     def __init__(self, **kwargs):
-        req_attributes = ['input_file', 'output_file']
+        req_attributes = ['file']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -93,13 +119,34 @@ class OneShotJSONBHistoryManager(HistoryManager):
             self.input_data = json.load(f)
         self.output_data = dict()
 
-    def get_data(self, begin_epoch : int, end_epoch : int):
+class EndpointJson(Endpoint):
+    """
+    A Json endpoint store and load data from a json file
+    ...
+
+    Public Methods
+    -------
+    todo()
+        todo
+    """
+
+    def __init__(self, **kwargs):
+        req_attributes = ['file']
+        for req_attribute in req_attributes:
+            if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
+            setattr(self, req_attribute, kwargs[req_attribute])
+        
+        with open(self.input_file, 'r') as f: 
+            self.input_data = json.load(f)
+        self.output_data = dict()
+
+    def load(self, begin_epoch : int, end_epoch : int):
         """TODO
         ----------
         """
         return self.input_data
 
-    def put_data(self, data):
+    def store(self, data):
         """TODO
         ----------
         """
@@ -109,6 +156,6 @@ class OneShotJSONBHistoryManager(HistoryManager):
         """Before destroying object, dump written data
         ----------
         """
-        print("OneShotJSONBHistoryManager: dumping data to", self.output_file)
+        print("JsonEndpoint: dumping data to", self.output_file)
         with open(self.output_file, 'w') as f: 
             f.write(json.dumps(self.output_data))

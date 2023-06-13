@@ -7,7 +7,8 @@ from schedulerlocal.node.memoryset import ServerMemorySet
 from schedulerlocal.node.jsonencoder import GlobalEncoder
 from schedulerlocal.domain.libvirtconnector import LibvirtConnector
 from schedulerlocal.schedulerlocal import SchedulerLocal
-from schedulerlocal.hist.historymanager import HistoryManager, InfluxDBHistoryManager
+from schedulerlocal.endpoint.endpointpool import EndpointPool
+from schedulerlocal.endpoint.endpoint import EndpointLive
 
 def print_usage():
     print('todo')
@@ -54,15 +55,16 @@ if __name__ == '__main__':
     libvirt_connector = LibvirtConnector(url='qemu:///system')
 
     ###########################################
-    # Third, load history manager
+    # Third, manage Endpoints
     ###########################################
-    history_manager = InfluxDBHistoryManager()
+    endpoint_pool = EndpointPool(loader=EndpointLive(), saver=None)
 
     ###########################################
     # Finally, launch scheduling facilities
     ###########################################
     scheduler_local = SchedulerLocal(cpuset=cpuset,\
                                     memset=memset,\
+                                    endpoint_pool=endpoint_pool,\
                                     connector=libvirt_connector,\
                                     tick=0.5,\
                                     debug_level=debug_level)

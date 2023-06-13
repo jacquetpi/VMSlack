@@ -113,6 +113,32 @@ class ServerCpu(object):
         """
         return self.max_freq
 
+    def has_time(self):
+        """Return if CPU times were initialised
+        ----------
+        """
+        return hasattr(self, 'idle') and hasattr(self, 'not_idle')
+
+    def set_time(self, idle : int, not_idle : int):
+        """Set CPU time
+        ----------
+        """
+        setattr(self, 'idle', idle)
+        setattr(self, 'not_idle', not_idle)
+
+    def get_time(self):
+        """Return CPU time
+        ----------
+        """
+        return getattr(self, 'idle'), getattr(self, 'not_idle')
+
+    def clear_time(self):
+        """Return if CPU times were initialised
+        ----------
+        """
+        if hasattr(self, 'idle'): delattr(self, 'idle')
+        if hasattr(self, 'not_idle'): delattr(self, 'not_idle')
+
     def __str__(self):
         """Return string representation of the core
         ----------

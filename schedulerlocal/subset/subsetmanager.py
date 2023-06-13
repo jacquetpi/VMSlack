@@ -1,5 +1,7 @@
 from schedulerlocal.subset.subset import SubsetCollection, Subset, CpuSubset, MemSubset
 from schedulerlocal.domain.domainentity import DomainEntity
+from schedulerlocal.node.cpuexplorer import CpuExplorer
+from schedulerlocal.node.memoryexplorer import MemoryExplorer
 
 class SubsetManager(object):
     """
@@ -18,7 +20,7 @@ class SubsetManager(object):
     """
 
     def __init__(self, **kwargs):
-        req_attributes = ['connector']
+        req_attributes = ['connector', 'endpoint_pool']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -199,6 +201,18 @@ class SubsetManager(object):
             self.collection.remove_subset(subset.get_id())
             del subset
 
+    def update_monitoring(self, timestamp : int):
+        """Order a monitoring session on each subset with specified timestamp key
+        Use endpoint_pool to load and store from the appropriate location
+        ----------
+
+        Parameters
+        ----------
+        timestamp : int
+            The timestamp key
+        """
+        self.collection.update_monitoring(timestamp=timestamp)
+
 class CpuSubsetManager(SubsetManager):
     """
     A CpuSubsetManager is an object in charge of determining appropriate CPU subset collection
@@ -219,6 +233,7 @@ class CpuSubsetManager(SubsetManager):
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
+        self.cpu_explorer = CpuExplorer()
         super().__init__(**kwargs)
 
     def try_to_create_subset(self,  initial_capacity : int, oversubscription : float):
@@ -244,7 +259,7 @@ class CpuSubsetManager(SubsetManager):
         available_cpus_ordered = self.__get_farthest_available_cpus()
         if len(available_cpus_ordered) < initial_capacity: return None
         starting_cpu = available_cpus_ordered[0]
-        cpu_subset = CpuSubset(oversubscription=oversubscription, connector=self.connector)
+        cpu_subset = CpuSubset(oversubscription=oversubscription, connector=self.connector, cpu_explorer=self.cpu_explorer, endpoint_pool=self.endpoint_pool)
         cpu_subset.add_res(starting_cpu)
 
         initial_capacity-=1 # One was attributed
@@ -442,6 +457,7 @@ class MemSubsetManager(SubsetManager):
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
+        self.mem_explorer = MemoryExplorer()
         super().__init__(**kwargs)
 
     def try_to_create_subset(self,  initial_capacity : int, oversubscription : float):
@@ -469,7 +485,7 @@ class MemSubsetManager(SubsetManager):
         if not self.__check_capacity_bound(bounds=new_tuple): return None
         if not self.__check_overlap(new_tuple=new_tuple): return None
 
-        mem_subset = MemSubset(oversubscription=oversubscription)
+        mem_subset = MemSubset(oversubscription=oversubscription, endpoint_pool=self.endpoint_pool, mem_explorer=self.mem_explorer)
 
         mem_subset.add_res(new_tuple)
         return mem_subset
@@ -618,12 +634,12 @@ class SubsetManagerPool(object):
     """
 
     def __init__(self, **kwargs):
-        req_attributes = ['connector', 'cpuset', 'memset']
+        req_attributes = ['connector', 'endpoint_pool', 'cpuset', 'memset']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
-        self.cpu_subset_manager = CpuSubsetManager(connector=self.connector, cpuset=self.cpuset, distance_max=50)
-        self.mem_subset_manager = MemSubsetManager(connector=self.connector, memset=self.memset)
+        self.cpu_subset_manager = CpuSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, cpuset=self.cpuset, distance_max=50)
+        self.mem_subset_manager = MemSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, memset=self.memset)
         self.vm_list = list()
         for vm in self.connector.get_vm_alive_as_entity(): 
             success = self.deploy(vm) # Treat pre-existing VM as deployment
@@ -678,7 +694,11 @@ class SubsetManagerPool(object):
         if not cpu_success: raise ValueError('Invalid configuration encountered')
         return True
 
-    def iterate(self):
+    def iterate(self, timestamp : int):
+        # Manage monitoring
+        self.cpu_subset_manager.update_monitoring(timestamp=timestamp)
+        self.mem_subset_manager.update_monitoring(timestamp=timestamp)
+
         print(self.cpu_subset_manager)
         print(self.mem_subset_manager)
 

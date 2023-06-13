@@ -25,3 +25,33 @@ class MemoryExplorer:
         total_mb = int(total_kb/1024)
         allowed_mb = total_mb - self.private_mb
         return ServerMemorySet(total=total_mb, allowed_mb=allowed_mb)
+
+    def get_usage(self, server_mem_list : list):
+        """Return the Memory usage of a given ServerMemory object list
+        /!\ Multiple MemSubset is not supported. We just report host memory usage for now
+        ----------
+
+        Parameters
+        ----------
+        server_mem_list : list
+            ServerMem object list
+
+        Returns
+        -------
+        mem_usage : int
+            Usage as [0;n] n being the number of element in server_mem_list
+        """
+        # Multiple MemSubset is not supported
+        with open(self.fs_meminfo, 'r') as f:
+            meminfo = f.readlines()
+        
+        total_found = re.search('^MemTotal:\s+(\d+)', meminfo[0])
+        if not total_found: raise ValueError('Error while parsing', self.fs_meminfo)
+        total_kb = int(total_found.groups()[0])
+
+        available_found = re.search('^MemAvailable:\s+(\d+)', meminfo[2])
+        if not available_found: raise ValueError('Error while parsing', self.fs_meminfo)
+        available_kb = int(available_found.groups()[0])
+
+        mem_usage = (total_kb-available_kb)/total_kb
+        return mem_usage
