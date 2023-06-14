@@ -1,6 +1,6 @@
 from json import JSONEncoder
 from schedulerlocal.node.memoryset import ServerMemorySet
-from schedulerlocal.node.cpuset import ServerCpuSet
+from schedulerlocal.node.cpuset import ServerCpuSet, ServerCpu
 
 class ServerCpuSetEncoder(JSONEncoder):
     """
@@ -23,8 +23,14 @@ class ServerCpuSetEncoder(JSONEncoder):
         if type(o) is not ServerCpuSet:
             return
         as_dict = dict(o.__dict__)
-        as_dict['cpu_list'] = [element.__dict__ for element in o.__dict__['cpu_list']]
+        as_dict['cpu_list'] = [self.convert_cpu_to_dict(cpu) for cpu in o.__dict__['cpu_list']]
         return as_dict
+
+
+    def convert_cpu_to_dict(self, cpu : ServerCpu):
+        cpu_dict = dict(cpu.__dict__ )
+        del cpu_dict['cpu_time']
+        return cpu_dict
 
 class ServerMemorySetEncoder(JSONEncoder):
     """

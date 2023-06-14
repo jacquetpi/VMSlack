@@ -26,7 +26,7 @@ class MemoryExplorer:
         allowed_mb = total_mb - self.private_mb
         return ServerMemorySet(total=total_mb, allowed_mb=allowed_mb)
 
-    def get_usage(self, server_mem_list : list):
+    def get_usage_of(self,  server_mem_list : list):
         """Return the Memory usage of a given ServerMemory object list
         /!\ Multiple MemSubset is not supported. We just report host memory usage for now
         ----------
@@ -42,6 +42,17 @@ class MemoryExplorer:
             Usage as [0;n] n being the number of element in server_mem_list
         """
         # Multiple MemSubset is not supported
+        return self.get_usage_global()
+
+    def get_usage_global(self):
+        """Return  host memory usage
+        ----------
+
+        Returns
+        -------
+        mem_usage : int
+            Usage as [0;1]
+        """
         with open(self.fs_meminfo, 'r') as f:
             meminfo = f.readlines()
         

@@ -1,7 +1,7 @@
 import re
 from os import listdir, sysconf
 from os.path import isfile, join, exists
-from schedulerlocal.node.cpuset import ServerCpu, ServerCpuSet
+from schedulerlocal.node.cpuset import ServerCpu, CpuTime, ServerCpuSet
 
 class CpuExplorer:
     """
@@ -33,11 +33,12 @@ class CpuExplorer:
         self.fs_cpu_maxfreq   = '/cpufreq/cpuinfo_max_freq'
         self.fs_numa          = '/sys/devices/system/node/'
         self.fs_numa_distance = '/distance'
-        self.fs_stat          = '/proc/stat' 
+        self.fs_stat          = '/proc/stat'
         # From https://www.kernel.org/doc/Documentation/filesystems/proc.txt
         self.fs_stats_keys         = {'cpuid':0, 'user':1, 'nice':2 , 'system':3, 'idle':4, 'iowait':5, 'irq':6, 'softirq':7, 'steal':8, 'guest':9, 'guest_nice':10}
         self.fs_stats_idle         = ['idle', 'iowait']
         self.fs_stats_not_idle     = ['user', 'nice', 'system', 'irq', 'softirq', 'steal']
+        self.global_cpu_time       = CpuTime()
 
     def build_cpuset(self):
         """Build a ServerCpuSet object from linux filesystem data
@@ -54,7 +55,7 @@ class CpuExplorer:
         cpuset.set_numa_distances(self.__read_numa_distance())
         return cpuset.build_distances()
 
-    def get_usage(self, server_cpu_list : list):
+    def get_usage_of(self, server_cpu_list : list):
         """Return the CPU usage of a given ServerCpu object list. None if unable to compute it (as delta values are needed=
         ----------
 
@@ -68,36 +69,76 @@ class CpuExplorer:
         cpu_usage : float
             Usage as [0;n] n being the number of element in server_cpu_list
         """
-        cpuid_dict = {'cpu'  + str(server_cpu.get_cpu_id()):server_cpu for server_cpu in server_cpu_list}
+        hist_by_cpu = {'cpu'  + str(server_cpu.get_cpu_id()):server_cpu.get_hist() for server_cpu in server_cpu_list}
         cumulated_cpu_usage = 0
-        with open('/proc/stat', 'r') as f:
+        with open(self.fs_stat, 'r') as f:
             lines = f.readlines()
 
-            for line in lines:
-                split = line.split(' ')
-                if not split[self.fs_stats_keys['cpuid']].startswith('cpu'): break
-                if split[self.fs_stats_keys['cpuid']] not in cpuid_dict.keys(): continue
+        for line in lines:
+            split = line.split(' ')
+            if not split[self.fs_stats_keys['cpuid']].startswith('cpu'): break
+            if split[self.fs_stats_keys['cpuid']] not in hist_by_cpu.keys(): continue
 
-                idle          = sum([ int(split[self.fs_stats_keys[idle_key]])     for idle_key     in self.fs_stats_idle])
-                not_idle      = sum([ int(split[self.fs_stats_keys[not_idle_key]]) for not_idle_key in self.fs_stats_not_idle])
-
-                # Compute delta
-                server_cpu = cpuid_dict[split[self.fs_stats_keys['cpuid']]]
-                cpu_usage  = None
-                if server_cpu.has_time():
-                    prev_idle, prev_not_idle = server_cpu.get_time()
-                    delta_idle     = idle - prev_idle
-                    delta_total    = (idle + not_idle) - (prev_idle + prev_not_idle)
-                    cpu_usage      = (delta_total-delta_idle)/delta_total
-                server_cpu.set_time(idle=idle, not_idle=not_idle)
-            
-                # Add usage to cumulated value
-                if cumulated_cpu_usage != None and cpu_usage != None:
-                    cumulated_cpu_usage+=cpu_usage
-                else: cumulated_cpu_usage = None # Do not break to compute others initializing values
-
-            return cumulated_cpu_usage
+            hist_object = hist_by_cpu[split[self.fs_stats_keys['cpuid']]]
+            cpu_usage = self.__get_usage_of_line(split=split, hist_object=hist_object)
         
+            # Add usage to cumulated value
+            if cumulated_cpu_usage != None and cpu_usage != None:
+                cumulated_cpu_usage+=cpu_usage
+            else: cumulated_cpu_usage = None # Do not break to compute others initializing values
+
+        return cumulated_cpu_usage
+
+    def get_usage_global(self):
+        """Return host CPU usage. None if unable to compute it (as delta values are needed=
+        ----------
+
+        Parameters
+        ----------
+        server_cpu_list : list
+            ServerCpu object list
+
+        Returns
+        -------
+        cpu_usage : float
+            Usage as [0;n] n being the number of element in server_cpu_list
+        """
+        with open(self.fs_stat, 'r') as f:
+            split = f.readlines()[0].split(' ')
+            split.remove('')
+        return self.__get_usage_of_line(split=split, hist_object=self.global_cpu_time)
+
+    def __get_usage_of_line(self, split : list, hist_object : object):
+        """Based on a /proc/stat splitted CPU line and an object having previous value, compute usage as delta
+        None if not able to compute the delta
+        ----------
+
+        Parameters
+        ----------
+        split : list
+            splitted CPU line from /proc/stat file
+        hist_object : object
+            Object having previous CPU time
+            
+        Returns
+        -------
+        cpu_usage : float
+            Usage as [0;1]
+        """
+        print(split)
+        idle          = sum([ int(split[self.fs_stats_keys[idle_key]])     for idle_key     in self.fs_stats_idle])
+        not_idle      = sum([ int(split[self.fs_stats_keys[not_idle_key]]) for not_idle_key in self.fs_stats_not_idle])
+
+        # Compute delta
+        cpu_usage  = None
+        if hist_object.has_time():
+            prev_idle, prev_not_idle = hist_object.get_time()
+            delta_idle     = idle - prev_idle
+            delta_total    = (idle + not_idle) - (prev_idle + prev_not_idle)
+            cpu_usage      = (delta_total-delta_idle)/delta_total
+        hist_object.set_time(idle=idle, not_idle=not_idle)
+        return cpu_usage
+
     def __retrieve_cpu_list(self):
         """Retrieve the list of cpu id conform to to_include and to_exclude attributes
         ----------
@@ -259,6 +300,6 @@ class CpuExplorer:
         elif '-' in text_to_convert:
             left_member = int(text_to_convert[:text_to_convert.find('-')])
             right_member = int(text_to_convert[text_to_convert.find('-')+1:])
-            return list(range(left_member, right_member))
+            return list(range(left_member, right_member+1))
         else:
             return [int(text_to_convert)]

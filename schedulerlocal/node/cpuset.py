@@ -32,6 +32,7 @@ class ServerCpu(object):
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
+        self.cpu_time = CpuTime()
 
     def compute_distance_to_cpu(self, other_cpu, numa_distances : dict):
         """Convert the distance from a given CPU to the current CPU occurence based on Cache level, siblings and numa distances
@@ -101,6 +102,12 @@ class ServerCpu(object):
         """
         return self.sib_cpu
 
+    def get_hist(self):
+        """Return Object keeping track of cpu time counters
+        ----------
+        """
+        return self.cpu_time
+
     def get_cache_level(self):
         """Return dict of cacheid related to the CPU
         ----------
@@ -113,6 +120,21 @@ class ServerCpu(object):
         """
         return self.max_freq
 
+    def __str__(self):
+        """Return string representation of the core
+        ----------
+        """
+        return 'cpu' + str(self.get_cpu_id()) +\
+            ' ' + str(self.get_max_freq()/1000) + 'Mhz' +\
+            ' on numa node ' + str(self.get_numa_node()) +\
+            ' with cache level id ' + str(self.get_cache_level())
+
+class CpuTime(object):
+    """
+    Object keeping track of cpu time counters
+    ...
+    """
+     
     def has_time(self):
         """Return if CPU times were initialised
         ----------
@@ -133,20 +155,11 @@ class ServerCpu(object):
         return getattr(self, 'idle'), getattr(self, 'not_idle')
 
     def clear_time(self):
-        """Return if CPU times were initialised
+        """Remove registered CPU time
         ----------
         """
         if hasattr(self, 'idle'): delattr(self, 'idle')
         if hasattr(self, 'not_idle'): delattr(self, 'not_idle')
-
-    def __str__(self):
-        """Return string representation of the core
-        ----------
-        """
-        return 'cpu' + str(self.get_cpu_id()) +\
-            ' ' + str(self.get_max_freq()/1000) + 'Mhz' +\
-            ' on numa node ' + str(self.get_numa_node()) +\
-            ' with cache level id ' + str(self.get_cache_level())
 
 class ServerCpuSet(object):
     """

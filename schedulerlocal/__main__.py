@@ -8,7 +8,7 @@ from schedulerlocal.node.jsonencoder import GlobalEncoder
 from schedulerlocal.domain.libvirtconnector import LibvirtConnector
 from schedulerlocal.schedulerlocal import SchedulerLocal
 from schedulerlocal.endpoint.endpointpool import EndpointPool
-from schedulerlocal.endpoint.endpoint import EndpointLive
+from schedulerlocal.endpoint.endpoint import EndpointLive, EndpointCSV
 
 def print_usage():
     print('todo')
@@ -56,8 +56,11 @@ if __name__ == '__main__':
 
     ###########################################
     # Third, manage Endpoints
-    ###########################################
-    endpoint_pool = EndpointPool(loader=EndpointLive(), saver=None)
+    ##########################################
+    saver = None
+    if debug_level>0:
+        saver = EndpointCSV(input_file=None, output_file='debug/monitoring.csv')
+    endpoint_pool = EndpointPool(loader=EndpointLive(), saver=saver)
 
     ###########################################
     # Finally, launch scheduling facilities

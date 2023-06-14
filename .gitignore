@@ -4,6 +4,7 @@
 # Misc
 .subsettracker.py
 debug/topology_local.json
+debug/monitoring.csv
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks

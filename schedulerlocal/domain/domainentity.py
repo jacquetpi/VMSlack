@@ -76,6 +76,36 @@ class DomainEntity:
         """
         return self.cpu_ratio
 
+    def has_time(self):
+        """Return if CPU times were initialised
+        ----------
+        """
+        return hasattr(self, 'epoch_ns') and hasattr(self, 'total') and hasattr(self, 'system') and hasattr(self, 'user')
+
+    def set_time(self, epoch_ns : int, total : int, system: int, user : int):
+        """Set CPU time
+        ----------
+        """
+        setattr(self, 'epoch_ns', epoch_ns)
+        setattr(self, 'total', total)
+        setattr(self, 'system', system)
+        setattr(self, 'user', user)
+
+    def get_time(self):
+        """Return CPU time
+        ----------
+        """
+        return getattr(self, 'epoch_ns'), getattr(self, 'total'), getattr(self, 'system'), getattr(self, 'user')
+
+    def clear_time(self):
+        """Remove registered CPU time
+        ----------
+        """
+        if hasattr(self, 'epoch_ns'): delattr(self, 'epoch_ns')
+        if hasattr(self, 'total'): delattr(self, 'total')
+        if hasattr(self, 'system'): delattr(self, 'system')
+        if hasattr(self, 'user'): delattr(self, 'user')
+
     def __str__(self):
         """Convert state to string
         ----------

@@ -1,4 +1,4 @@
-import libvirt
+import libvirt, time
 from schedulerlocal.domain.libvirtxmlmodifier import xmlDomainNuma, xmlDomainMetaData
 from schedulerlocal.domain.domainentity import DomainEntity
 
@@ -115,8 +115,8 @@ class LibvirtConnector(object):
         self.cache_entity[uuid] = DomainEntity(uuid=uuid, name=name, mem=mem, cpu=cpu, cpu_pin=cpu_pin, cpu_ratio=cpu_ratio)
         return self.cache_entity[uuid]
 
-    def update_cpu_pinning(self, vm_uuid : str, cpuid_list : list):
-        """Update the pinning of a VM (identified by its uuid) to the list of cpuid if required
+    def update_cpu_pinning(self, vm : DomainEntity, cpuid_list : list):
+        """Update the pinning of a VM to the list of cpuid if required
         ----------
 
         Parameters
@@ -127,7 +127,7 @@ class LibvirtConnector(object):
             list of CPUID
         """
         # Retrieve VM
-        virDomain = self.conn.lookupByUUIDString(vm_uuid)
+        virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
         vm_pin       = virDomain.vcpuPinInfo()
         # Build template
         template_pin = [False for is_cpu_pinned in vm_pin[0]]
@@ -150,8 +150,65 @@ class LibvirtConnector(object):
         del self.cache_entity
         self.cache_entity = dict()
 
+    def get_usage_cpu(self, vm : DomainEntity):
+        """Return the latest CPU usage of a given VM. None if unable to compute it (as delta are required)
+        ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+           VM to consider
+
+        Returns
+        -------
+        cpu_usage : float
+            Usage as [0;1]
+        """
+        virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
+        epoch_ns = time.time_ns()
+        try:
+            stats = virDomain.getCPUStats(total=True)
+        except libvirt.libvirtError as ex:  # VM is not alived
+            raise ConsumerNotAlived()
+        total, system, user = (stats[0]['cpu_time'], stats[0]['system_time'], stats[0]['user_time'])
+        cpu_usage_norm = None
+        if vm.has_time(): # Compute delta
+            prev_epoch, prev_total, prev_system, prev_user = vm.get_time()
+            cpu_usage = (total-prev_total)/(epoch_ns-prev_epoch)
+            cpu_usage_norm = cpu_usage / vm.get_cpu()
+            if cpu_usage_norm>1: cpu_usage_norm = 1
+        vm.set_time(epoch_ns=epoch_ns,total=total, system=system, user=user)
+        return cpu_usage_norm
+
+    def get_usage_mem(self, vm : DomainEntity):
+        """Return the latest Mem usage of a given VM
+        ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+           VM to consider
+
+        Returns
+        -------
+        cpu_usage : float
+            Usage as [0;1]
+        """
+        virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
+        try:
+            stats = virDomain.memoryStats()
+        except libvirt.libvirtError as ex:  # VM is not alived
+            raise ConsumerNotAlived()
+        #keys = ['actual', 'available', 'rss', 'major_fault']
+        usage = stats['rss']/stats['actual']
+        if usage>1: return 1
+        return usage
+
     def __del__(self):
         """Clean up actions
         ----------
         """
         self.conn.close()
+
+class ConsumerNotAlived(Exception):
+    pass

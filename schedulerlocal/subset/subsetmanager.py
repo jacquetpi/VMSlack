@@ -144,7 +144,7 @@ class SubsetManager(object):
         Returns
         -------
         subset : Subset
-            Return Subset created. None if failed.
+            Return Subset created. None if failed. Resource dependant. Must be reimplemented
         """
         raise NotImplementedError()
 
@@ -201,8 +201,18 @@ class SubsetManager(object):
             self.collection.remove_subset(subset.get_id())
             del subset
 
+    def get_current_resources_usage(self):
+        """Get current usage of physical resources. Resource dependant. Must be reimplemented
+
+        Returns
+        -------
+        usage : int
+            Percentage [0:1]
+        """
+        raise NotImplementedError()
+
     def update_monitoring(self, timestamp : int):
-        """Order a monitoring session on each subset with specified timestamp key
+        """Order a monitoring session on host and on each subset with specified timestamp key
         Use endpoint_pool to load and store from the appropriate location
         ----------
 
@@ -211,7 +221,21 @@ class SubsetManager(object):
         timestamp : int
             The timestamp key
         """
+        # Update global data: Nothing is done live with it currently but data are dumped for post analysis
+        data = self.endpoint_pool.load_global(timestamp=timestamp, subset_manager=self)
+        # Update subset data
         self.collection.update_monitoring(timestamp=timestamp)
+
+    def get_res_name(self):
+        """Get resource name managed by ManagerSubset. Resource dependant. Must be reimplemented
+        ----------
+
+        Return
+        ----------
+        res : str
+            resource name
+        """
+        raise NotImplementedError()
 
 class CpuSubsetManager(SubsetManager):
     """
@@ -229,7 +253,7 @@ class CpuSubsetManager(SubsetManager):
         Deploy a VM to the appropriate CPU subset
     """
     def __init__(self, **kwargs):
-        req_attributes = ['cpuset', 'distance_max', 'connector']
+        req_attributes = ['connector', 'cpuset', 'distance_max']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -417,6 +441,16 @@ class CpuSubsetManager(SubsetManager):
         """
         return vm.get_cpu_ratio()
 
+    def get_current_resources_usage(self):
+        """Get usage of physical CPU resources
+
+        Returns
+        -------
+        Usage : int
+            Percentage [0:1]
+        """
+        return self.cpu_explorer.get_usage_global()
+
     def get_request(self, vm : DomainEntity):
         """For a given VM, return its CPU request
         ----------
@@ -432,6 +466,17 @@ class CpuSubsetManager(SubsetManager):
             CPU request of given VM
         """
         return vm.get_cpu()
+
+    def get_res_name(self):
+        """Get resource name managed by ManagerSubset
+        ----------
+
+        Return
+        ----------
+        res : str
+            resource name
+        """
+        return 'cpu'
 
     def __str__(self):
         return 'CPUSubsetManager:\n' +  str(self.collection)
@@ -453,7 +498,7 @@ class MemSubsetManager(SubsetManager):
         Deploy a VM to the appropriate CPU subset
     """
     def __init__(self, **kwargs):
-        req_attributes = ['memset']
+        req_attributes = ['connector', 'memset']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -485,7 +530,7 @@ class MemSubsetManager(SubsetManager):
         if not self.__check_capacity_bound(bounds=new_tuple): return None
         if not self.__check_overlap(new_tuple=new_tuple): return None
 
-        mem_subset = MemSubset(oversubscription=oversubscription, endpoint_pool=self.endpoint_pool, mem_explorer=self.mem_explorer)
+        mem_subset = MemSubset(oversubscription=oversubscription, connector=self.connector, endpoint_pool=self.endpoint_pool, mem_explorer=self.mem_explorer)
 
         mem_subset.add_res(new_tuple)
         return mem_subset
@@ -594,6 +639,16 @@ class MemSubsetManager(SubsetManager):
         """
         return 1 # Memory is out of scope of this paper
 
+    def get_current_resources_usage(self):
+        """Get usage of physical Memory resources
+
+        Returns
+        -------
+        Usage : int
+            Percentage [0:1]
+        """
+        return self.mem_explorer.get_usage_global()
+
     def get_request(self, vm : DomainEntity):
         """For a given VM, return its memory request
         ----------
@@ -609,6 +664,17 @@ class MemSubsetManager(SubsetManager):
             Memory request of given VM
         """
         return vm.get_mem(as_kb=False) # in MB
+
+    def get_res_name(self):
+        """Get resource name managed by ManagerSubset
+        ----------
+
+        Return
+        ----------
+        res : str
+            resource name
+        """
+        return 'mem'
 
     def __str__(self):
         return 'MemSubsetManager:\n' +  str(self.collection)

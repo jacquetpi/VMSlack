@@ -1,5 +1,6 @@
 from schedulerlocal.subset.subsetoversubscription import SubsetOversubscription, SubsetOversubscriptionStatic
 from schedulerlocal.domain.domainentity import DomainEntity
+from schedulerlocal.domain.libvirtconnector import LibvirtConnector, ConsumerNotAlived
 from schedulerlocal.endpoint.endpointpool import EndpointPool
 
 class Subset(object):
@@ -83,6 +84,17 @@ class Subset(object):
             resources list
         """
         return self.res_list
+
+    def get_res_name(self):
+        """Get resource name managed by susbset. Resource dependant. Must be reimplemented
+        ----------
+
+        Return
+        ----------
+        res : str
+            resource name
+        """
+        raise NotImplementedError()
 
     def count_res(self):
         """Count resources in subset
@@ -229,22 +241,53 @@ class Subset(object):
         raise NotImplementedError()
 
     def get_usage(self):
-        """Get history of usage on physical resources from endpoint
+        """Get history of usage on resources from endpoint
 
         Returns
         -------
         Usage : dict
             data as dict
         """
-        return self.endpoint_pool.load(self)
+        return self.endpoint_pool.load_subset(subset=self) # TODO
 
-    def get_current_usage(self):
+    def get_current_resources_usage(self):
         """Get current usage of physical resources. Resource dependant. Must be reimplemented
 
         Returns
         -------
         usage : int
-            Percentage [0:100]
+            Percentage [0:1]
+        """
+        raise NotImplementedError()
+
+    def get_current_consumers_usage(self):
+        """Get current CPU usage of consumers
+
+        Returns
+        -------
+        usage : dict
+            dict of consumer id with their Percentage [0:1]
+        """
+        usage = dict()
+        for consumer in self.consumer_list:
+            try:
+                data = self.get_current_consumer_usage(consumer)
+            except ConsumerNotAlived as ex: continue
+            usage[consumer.get_uuid()] = (consumer, data) # due to serialization needs on key
+        return usage
+
+    def get_current_consumer_usage(self, consumer : DomainEntity):
+        """Get current usage of a single consumer. Resource dependant. Must be reimplemented
+
+        Parameters
+        ----------
+        consumer : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        usage : float
+            Percentage [0:1]
         """
         raise NotImplementedError()
 
@@ -268,7 +311,9 @@ class Subset(object):
         timestamp : int
             The timestamp key
         """
-        self.endpoint_pool.load(timestamp=timestamp, subset=self)
+        current_usage, current_vm_usage = self.endpoint_pool.load_subset(timestamp=timestamp, subset=self)
+        for consumer in self.consumer_list: # Update consumer list
+            if consumer.get_uuid() not in current_vm_usage.keys(): self.remove_consumer(consumer)
 
 class SubsetCollection(object):
     """
@@ -416,6 +461,17 @@ class CpuSubset(Subset):
             setattr(self, req_attribute, kwargs[req_attribute])
         super().__init__(**kwargs)
 
+    def get_res_name(self):
+        """Get resource name managed by susbset
+        ----------
+
+        Return
+        ----------
+        res : str
+            resource name
+        """
+        return 'cpu'
+
     def get_vm_allocation(self, vm : DomainEntity):
         """Return CPU allocation of a given VM without oversubscription consideration
         ----------
@@ -443,15 +499,31 @@ class CpuSubset(Subset):
         """
         return self.count_res()
 
-    def get_current_usage(self):
+    def get_current_resources_usage(self):
         """Get usage of physical CPU resources
 
         Returns
         -------
         Usage : int
-            Percentage [0:100]
+            Percentage [0:1]
         """
-        return self.cpu_explorer.get_usage(self.get_res())
+        return self.cpu_explorer.get_usage_of(self.get_res())
+
+
+    def get_current_consumer_usage(self, consumer : DomainEntity):
+        """Get current CPU usage of a single consumer
+        
+        Parameters
+        ----------
+        consumer : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        usage : float
+            Percentage [0:1]
+        """
+        return self.connector.get_usage_cpu(consumer)
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on CPU subset
@@ -467,7 +539,7 @@ class CpuSubset(Subset):
         # Update vm pinning
         self.sync_pinning()
         # Reset CPU time used to compute usage
-        for server_cpu in self.res_list: server_cpu.clear_time()
+        for server_cpu in self.res_list: server_cpu.get_hist().clear_time()
         return success
 
     def sync_pinning(self):
@@ -476,7 +548,7 @@ class CpuSubset(Subset):
         """
         cpuid_list = [cpu.get_cpu_id() for cpu in self.res_list]
         for consumer in self.consumer_list:
-            self.connector.update_cpu_pinning(vm_uuid=consumer.get_uuid(), cpuid_list=cpuid_list)
+            self.connector.update_cpu_pinning(vm=consumer, cpuid_list=cpuid_list)
 
     def __str__(self):
         return 'CpuSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\
@@ -495,11 +567,22 @@ class MemSubset(Subset):
     """
 
     def __init__(self, **kwargs):
-        additional_attributes = ['mem_explorer']
+        additional_attributes = ['connector', 'mem_explorer']
         for req_attribute in additional_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', additional_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
         super().__init__(**kwargs)
+
+    def get_res_name(self):
+        """Get resource name managed by susbset
+        ----------
+
+        Return
+        ----------
+        res : str
+            resource name
+        """
+        return 'mem'
 
     def get_vm_allocation(self, vm : DomainEntity):
         """Return Memory allocation of a given VM without oversubscription consideration
@@ -526,15 +609,30 @@ class MemSubset(Subset):
             capacity += (bound_superior-bound_inferior) 
         return capacity
 
-    def get_current_usage(self):
+    def get_current_resources_usage(self):
         """Get usage of physical Memory resources
 
         Returns
         -------
         Usage : int
-            Percentage [0:100]
+            Percentage [0:1]
         """
-        return self.mem_explorer.get_usage(self.get_res())
+        return self.mem_explorer.get_usage_of(self.get_res())
+
+    def get_current_consumer_usage(self, consumer : DomainEntity):
+        """Get current Memory usage of a single consumer
+
+        Parameters
+        ----------
+        consumer : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        usage : dict
+            Percentage [0:1]
+        """
+        return self.connector.get_usage_mem(consumer) 
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on memory subset
