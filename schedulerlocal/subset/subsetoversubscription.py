@@ -117,11 +117,14 @@ class SubsetOversubscriptionStatic(SubsetOversubscription):
         """
         request    = self.subset.get_vm_allocation(vm) # Without oversubscription
         capacity   = self.subset.get_capacity() # Without oversubscription
-        if capacity < request:
-            return ceil(request-capacity) # otherwise, VM will be oversubscribed with itself
+
         available_oversubscribed = self.get_available()
         missing_oversubscribed   = (request - available_oversubscribed)
         missing_physical = ceil(missing_oversubscribed/self.ratio) if missing_oversubscribed > 0 else 0
+        new_capacity = capacity + missing_physical
+
+        if new_capacity < request: # otherwise, VM will be oversubscribed with itself
+            missing_physical+= ceil(request-new_capacity) 
         return missing_physical
 
     def get_id(self):

@@ -49,9 +49,9 @@ class CpuExplorer:
         cpuset : ServerCpuSet
             Local Cpuset
         """
-        cpuset = ServerCpuSet()
-        cpu_list = self.__retrieve_cpu_list()
-        for cpu in cpu_list: cpuset.add_cpu(self.__read_cpu(cpu, cpu_list))
+        cpu_count, cpu_list_conform = self.__retrieve_cpu_list()
+        cpuset = ServerCpuSet(host_count=cpu_count)
+        for cpu in cpu_list_conform: cpuset.add_cpu(self.__read_cpu(cpu, cpu_list_conform))
         cpuset.set_numa_distances(self.__read_numa_distance())
         return cpuset.build_distances()
 
@@ -125,7 +125,6 @@ class CpuExplorer:
         cpu_usage : float
             Usage as [0;1]
         """
-        print(split)
         idle          = sum([ int(split[self.fs_stats_keys[idle_key]])     for idle_key     in self.fs_stats_idle])
         not_idle      = sum([ int(split[self.fs_stats_keys[not_idle_key]]) for not_idle_key in self.fs_stats_not_idle])
 
@@ -145,6 +144,8 @@ class CpuExplorer:
 
         Returns
         -------
+        cpu_found : int
+            Number of CPU on host
         cpu_conform : str
             list of CPU
         """
@@ -152,7 +153,7 @@ class CpuExplorer:
         cpu_found = [int(re.sub("[^0-9]", '', f)) for f in listdir(self.fs_cpu) if not isfile(join(self.fs_cpu_topology, f)) and re.match(regex, f)]
         cpu_conform = [core for core in cpu_found if (core not in self.to_exclude) and (not self.to_include or core in self.to_include)]
         cpu_conform.sort()
-        return cpu_conform
+        return len(cpu_found), cpu_conform
 
     def __read_cpu(self, cpu : int, conform_cpu_list : list):
         """Build a ServerCpu object from specified cpu id using Linux filesystem data

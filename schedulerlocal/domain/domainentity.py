@@ -24,16 +24,27 @@ class DomainEntity:
     """
 
     def __init__(self, **kwargs):
-        req_attributes = ['uuid', 'name', 'mem', 'cpu', 'cpu_pin', 'cpu_ratio']
+        req_attributes = ['name', 'mem', 'cpu', 'cpu_ratio']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
+        opt_attributes = ['uuid', 'cpu_pin']
+        for opt_attribute in opt_attributes:
+            if opt_attribute in kwargs:
+                setattr(self, opt_attribute, kwargs[opt_attribute])
+            else: setattr(self, opt_attribute, None)
 
     def get_uuid(self):
         """Return VM uuid
         ----------
         """
         return self.uuid
+
+    def is_deployed(self):
+        """Return if VM is deployed
+        ----------
+        """
+        return self.uuid != None
 
     def get_name(self):
         """Return VM name
@@ -59,6 +70,12 @@ class DomainEntity:
         ----------
         """
         return self.cpu_pin
+
+    def set_cpu_pin(self, template_pin : tuple):
+        """Set CPU pin situation based on template
+        ----------
+        """
+        self.cpu_pin = [template_pin for vcpu in range(self.get_cpu())]
 
     def get_cpu_pin_aggregated(self):
         """Return a dict specifying for each cpuid if at least one vCPU is pinned to it (boolean value)
@@ -110,4 +127,4 @@ class DomainEntity:
         """Convert state to string
         ----------
         """
-        return 'vm ' + self.get_name() + ' ' + str(self.get_cpu()) + 'vCPU ' + str(self.get_mem()) + 'MB with oc ' + str(self.get_cpu_ratio) + '\n'
+        return 'vm ' + self.get_name() + ' ' + str(self.get_cpu()) + 'vCPU ' + str(self.get_mem(as_kb=False)) + 'MB with oc ' + str(self.get_cpu_ratio()) + '\n'

@@ -115,7 +115,7 @@ class LibvirtConnector(object):
         self.cache_entity[uuid] = DomainEntity(uuid=uuid, name=name, mem=mem, cpu=cpu, cpu_pin=cpu_pin, cpu_ratio=cpu_ratio)
         return self.cache_entity[uuid]
 
-    def update_cpu_pinning(self, vm : DomainEntity, cpuid_list : list):
+    def update_cpu_pinning(self, vm : DomainEntity, template_pin : tuple):
         """Update the pinning of a VM to the list of cpuid if required
         ----------
 
@@ -123,25 +123,43 @@ class LibvirtConnector(object):
         ----------
         vm_uuid : str
             VM identifier
-        cpuid_list : list
-            list of CPUID
+        template_pin : tuple
+            libvirt pinning template
         """
         # Retrieve VM
         virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
         vm_pin       = virDomain.vcpuPinInfo()
-        # Build template
-        template_pin = [False for is_cpu_pinned in vm_pin[0]]
-        for cpuid in cpuid_list: template_pin[cpuid] = True
-        template_pin = tuple(template_pin)
+    
         # Test if update is needed
         update_needed = False
         for vcpu_pin in vm_pin:
             if vcpu_pin != template_pin: 
                 update_needed = True
                 break
+
         # Update
         if update_needed: 
             for vcpu in range(len(vm_pin)): virDomain.pinVcpu(vcpu, template_pin)
+
+    def build_cpu_pinning(self, cpu_list : list, host_config : int):
+        """Return Libvirt template of cpu pinning based on authorised list of cpu
+        ----------
+
+        Parameters
+        ----------
+        cpu_list : list
+            List of ServerCPU 
+        host_config : int
+           Number of core on host
+        Returns
+        -------
+
+        template : Tuple
+            Pinning template
+        """
+        template_pin = [False for is_cpu_pinned in range(host_config)]
+        for cpu in cpu_list: template_pin[cpu.get_cpu_id()] = True
+        return tuple(template_pin)
 
     def cache_purge(self):
         """Purge cache associating VM uuid to their domainentity representation

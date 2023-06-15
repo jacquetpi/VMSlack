@@ -1,7 +1,7 @@
 from schedulerlocal.subset.subsetoversubscription import SubsetOversubscription, SubsetOversubscriptionStatic
 from schedulerlocal.domain.domainentity import DomainEntity
 from schedulerlocal.domain.libvirtconnector import LibvirtConnector, ConsumerNotAlived
-from schedulerlocal.endpoint.endpointpool import EndpointPool
+from schedulerlocal.dataendpoint.dataendpointpool import DataEndpointPool
 
 class Subset(object):
     """
@@ -84,6 +84,24 @@ class Subset(object):
             resources list
         """
         return self.res_list
+
+    def has_vm(self, vm : DomainEntity):
+        """Test if a vm is present in subset
+        ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        success : bool
+            Return success status of operation
+        """
+        for consumer in self.consumer_list:
+            if consumer.get_uuid() == vm.get_uuid(): return True
+        return False
 
     def get_res_name(self):
         """Get resource name managed by susbset. Resource dependant. Must be reimplemented
@@ -270,6 +288,7 @@ class Subset(object):
         """
         usage = dict()
         for consumer in self.consumer_list:
+            if not consumer.is_deployed(): continue
             try:
                 data = self.get_current_consumer_usage(consumer)
             except ConsumerNotAlived as ex: continue
@@ -293,10 +312,11 @@ class Subset(object):
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on resources. Resource dependant. Must be reimplemented with a super call
+        Should adapt the DomainEntity object as required before the subsetManager applies changes with connector
         """
         available_oversubscribed = self.oversubscription.get_available()
         if available_oversubscribed < self.get_vm_allocation(vm): 
-            print('Warning: Not enough resources available to deploy', vm.get_name())
+            print('Warning: Not enough resources available to deploy', vm.get_name(), 'on res', self.get_res_name(), 'for request', self.get_vm_allocation(vm))
             return False
         self.add_consumer(vm)
         return True
@@ -306,14 +326,25 @@ class Subset(object):
         Use endpoint_pool to load and store from the appropriate location
         ----------
 
+        Returns
+        -------
+        clean_needed : bool
+            If VM left under the scope of the scheduler (without passing by manager), return True
+
         Parameters
         ----------
         timestamp : int
             The timestamp key
         """
         current_usage, current_vm_usage = self.endpoint_pool.load_subset(timestamp=timestamp, subset=self)
+        clean_needed = False
         for consumer in self.consumer_list: # Update consumer list
-            if consumer.get_uuid() not in current_vm_usage.keys(): self.remove_consumer(consumer)
+            if consumer.get_uuid() not in current_vm_usage.keys(): 
+                if consumer.is_deployed(): 
+                    print('Warning: a VM left without passing by scheduler', consumer.get_name())
+                    self.remove_consumer(consumer)
+                    clean_needed = True
+        return True
 
 class SubsetCollection(object):
     """
@@ -428,6 +459,24 @@ class SubsetCollection(object):
         for subset in self.subset_dict.values(): res.extend(subset.get_res())
         return res
 
+    def has_vm(self, vm : DomainEntity):
+        """Test if a VM is present in a subset
+        ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        success : bool
+            Return success status of operation
+        """
+        for subset in self.subset_dict.values(): 
+            if subset.has_vm(vm): return True
+        return False
+
     def update_monitoring(self, timestamp : int):
         """Order a monitoring session on each subset with specified timestamp key
         Use endpoint_pool to load and store from the appropriate location
@@ -437,8 +486,16 @@ class SubsetCollection(object):
         ----------
         timestamp : int
             The timestamp key
+
+        Returns
+        -------
+        clean_needed_list : list()
+            List of subset having VM which left without passing by our scheduler methods
         """
-        for subset in self.subset_dict.values(): subset.update_monitoring(timestamp=timestamp)
+        clean_needed_list = list()
+        for subset in self.subset_dict.values(): 
+            if(subset.update_monitoring(timestamp=timestamp)): clean_needed_list.append(subset)
+        return clean_needed_list
 
     def __str__(self):
         return ''.join(['|_>' + str(v) + '\n' for v in self.subset_dict.values()])
@@ -455,7 +512,7 @@ class CpuSubset(Subset):
     """
 
     def __init__(self, **kwargs):
-        additional_attributes = ['connector', 'cpu_explorer']
+        additional_attributes = ['connector', 'cpu_explorer', 'cpu_count']
         for req_attribute in additional_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', additional_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -527,7 +584,7 @@ class CpuSubset(Subset):
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on CPU subset
-        Raise an exception if not enough resources are available
+        Should adapt the DomainEntity object as required before the subsetManager applies changes with connector
         ----------
         
         Parameters
@@ -546,9 +603,10 @@ class CpuSubset(Subset):
         """Synchronize VM pinning to CPU according to the current ServerCPU list
         ----------
         """
-        cpuid_list = [cpu.get_cpu_id() for cpu in self.res_list]
+        template = self.connector.build_cpu_pinning(cpu_list=self.get_res(), host_config=self.cpu_count)
         for consumer in self.consumer_list:
-            self.connector.update_cpu_pinning(vm=consumer, cpuid_list=cpuid_list)
+            consumer.set_cpu_pin(template)
+            if consumer.is_deployed(): self.connector.update_cpu_pinning(vm=consumer, template_pin=template)
 
     def __str__(self):
         return 'CpuSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\
@@ -636,7 +694,7 @@ class MemSubset(Subset):
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on memory subset
-        Raise an exception if not enough resources are available
+        Should adapt the DomainEntity object as required before the subsetManager applies changes with connector
         ----------
         
         Parameters

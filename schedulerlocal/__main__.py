@@ -7,8 +7,8 @@ from schedulerlocal.node.memoryset import ServerMemorySet
 from schedulerlocal.node.jsonencoder import GlobalEncoder
 from schedulerlocal.domain.libvirtconnector import LibvirtConnector
 from schedulerlocal.schedulerlocal import SchedulerLocal
-from schedulerlocal.endpoint.endpointpool import EndpointPool
-from schedulerlocal.endpoint.endpoint import EndpointLive, EndpointCSV
+from schedulerlocal.dataendpoint.dataendpointpool import DataEndpointPool
+from schedulerlocal.dataendpoint.dataendpoint import DataEndpointLive, DataEndpointCSV
 
 def print_usage():
     print('todo')
@@ -59,8 +59,8 @@ if __name__ == '__main__':
     ##########################################
     saver = None
     if debug_level>0:
-        saver = EndpointCSV(input_file=None, output_file='debug/monitoring.csv')
-    endpoint_pool = EndpointPool(loader=EndpointLive(), saver=saver)
+        saver = DataEndpointCSV(input_file=None, output_file='debug/monitoring.csv')
+    endpoint_pool = DataEndpointPool(loader=DataEndpointLive(), saver=saver)
 
     ###########################################
     # Finally, launch scheduling facilities
@@ -69,7 +69,9 @@ if __name__ == '__main__':
                                     memset=memset,\
                                     endpoint_pool=endpoint_pool,\
                                     connector=libvirt_connector,\
-                                    tick=0.5,\
+                                    tick=0.25,\
+                                    api_url='127.0.0.1',
+                                    api_port='8099',
                                     debug_level=debug_level)
     try:
         scheduler_local.run()

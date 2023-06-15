@@ -65,6 +65,22 @@ class SubsetManager(object):
         self.shrink_subset(subset)
         return True
 
+    def has_vm(self, vm : DomainEntity):
+        """Test if a VM is present in a subset
+        ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        success : bool
+            Return success status of operation
+        """
+        return self.collection.has_vm(vm)
+
     def __try_to_deploy_on_existing_subset(self,  vm : DomainEntity):
         """Try to deploy a VM to an existing subset by extending it if required 
         ----------
@@ -106,7 +122,7 @@ class SubsetManager(object):
             Return success status of operation
         """
         oversubscription = self.get_appropriate_id(vm)
-        # Even in oversubscribed env, CPU should be on a pool having pCPU > vCPU to not be oversubscribed with itself
+        # Even in oversubscribed env, vm should be on a pool having pRES => vRES to not be oversubscribed with itself
         subset = self.try_to_create_subset(initial_capacity=self.get_request(vm), oversubscription=oversubscription)
         if subset == None: return False
         self.collection.add_subset(oversubscription, subset)
@@ -198,7 +214,7 @@ class SubsetManager(object):
         """
         # Must be reimplemented
         if (subset.count_res() == 0) and (subset.count_consumer() ==0):
-            self.collection.remove_subset(subset.get_id())
+            self.collection.remove_subset(subset.get_oversubscription_id())
             del subset
 
     def get_current_resources_usage(self):
@@ -212,7 +228,7 @@ class SubsetManager(object):
         raise NotImplementedError()
 
     def update_monitoring(self, timestamp : int):
-        """Order a monitoring session on host and on each subset with specified timestamp key
+        """Order a monitoring session on host resources and on each subset with specified timestamp key
         Use endpoint_pool to load and store from the appropriate location
         ----------
 
@@ -224,7 +240,8 @@ class SubsetManager(object):
         # Update global data: Nothing is done live with it currently but data are dumped for post analysis
         data = self.endpoint_pool.load_global(timestamp=timestamp, subset_manager=self)
         # Update subset data
-        self.collection.update_monitoring(timestamp=timestamp)
+        clean_needed_list = self.collection.update_monitoring(timestamp=timestamp)
+        for subset in clean_needed_list: self.shrink_subset(subset)
 
     def get_res_name(self):
         """Get resource name managed by ManagerSubset. Resource dependant. Must be reimplemented
@@ -283,7 +300,8 @@ class CpuSubsetManager(SubsetManager):
         available_cpus_ordered = self.__get_farthest_available_cpus()
         if len(available_cpus_ordered) < initial_capacity: return None
         starting_cpu = available_cpus_ordered[0]
-        cpu_subset = CpuSubset(oversubscription=oversubscription, connector=self.connector, cpu_explorer=self.cpu_explorer, endpoint_pool=self.endpoint_pool)
+        cpu_subset = CpuSubset(connector=self.connector, cpu_explorer=self.cpu_explorer, endpoint_pool=self.endpoint_pool,\
+            oversubscription=oversubscription, cpu_count=self.cpuset.get_host_count())
         cpu_subset.add_res(starting_cpu)
 
         initial_capacity-=1 # One was attributed
@@ -704,13 +722,10 @@ class SubsetManagerPool(object):
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
-        self.cpu_subset_manager = CpuSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, cpuset=self.cpuset, distance_max=50)
-        self.mem_subset_manager = MemSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, memset=self.memset)
-        self.vm_list = list()
-        for vm in self.connector.get_vm_alive_as_entity(): 
-            success = self.deploy(vm) # Treat pre-existing VM as deployment
-            print('Deployement', vm.get_name(), success)
-            self.vm_list.append(vm)
+        self.subset_managers = {
+            'cpu': CpuSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, cpuset=self.cpuset, distance_max=50),\
+            'mem': MemSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, memset=self.memset)
+            }
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on subset managers
@@ -726,19 +741,18 @@ class SubsetManagerPool(object):
         success : bool
             Return success status of operation
         """
-
-        # For testing purposes only
-        if 'alpinelinux3.14-2' in vm.get_name():
-            setattr(vm, 'cpu_ratio', 2)
-            print('changing oc', vm.get_cpu_ratio())
-
-        mem_success = self.mem_subset_manager.deploy(vm)
-        if not mem_success: return False
-        cpu_success = self.cpu_subset_manager.deploy(vm)
-        if not cpu_success:
-            self.mem_subset_manager.remove(vm)
-            return False
-        return True
+        treated = list()
+        success = True
+        for subset_manager in self.subset_managers.values():
+            if not subset_manager.deploy(vm): 
+                success = False
+                break
+            treated.append(subset_manager)
+        if success: return success
+        # If one failed, we have to remove VM from others subset
+        for subset_manager in treated: 
+            if not subset_manager.remove(vm): raise ValueError('Invalid state encountered')
+        return success
 
     def remove(self, vm : DomainEntity):
         """Remove a VM from subset managers
@@ -754,19 +768,52 @@ class SubsetManagerPool(object):
         success : bool
             Return success status of operation
         """
-        mem_success = self.mem_subset_manager.remove(vm)
-        if not mem_success: return False
-        cpu_success = self.cpu_subset_manager.remove(vm)
-        if not cpu_success: raise ValueError('Invalid configuration encountered')
-        return True
+        treated = list()
+        success = True
+        for subset_manager in self.subset_managers.values():
+            if not subset_manager.deploy(vm): 
+                success = False
+                break
+            treated.append(subset_manager)
+        if not success and treated: raise ValueError('Invalid state encountered')
+        return success
 
     def iterate(self, timestamp : int):
         # Manage monitoring
-        self.cpu_subset_manager.update_monitoring(timestamp=timestamp)
-        self.mem_subset_manager.update_monitoring(timestamp=timestamp)
+        self.watch_out_of_schedulers_vm()
+        for subset_manager in self.subset_managers.values():
+            subset_manager.update_monitoring(timestamp=timestamp)
+            print(subset_manager)
 
-        print(self.cpu_subset_manager)
-        print(self.mem_subset_manager)
+    def watch_out_of_schedulers_vm(self):
+        """Treat VM deployed without passing by scheduler as deployment
+        ----------
+        """
+        for vm in self.connector.get_vm_alive_as_entity():
+            if not self.has_vm(vm):
+                success = self.deploy(vm)
+                print('Warning: VM deployed out of scope of this scheduler detected ', vm.get_name(), ' was integred:', success)
+
+    def has_vm(self, vm : DomainEntity):
+        """Test if a VM is present in subsetManagers
+        ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+            The VM to consider
+
+        Returns
+        -------
+        success : bool
+            Return success status of operation
+        """
+        has_vm           = 0
+        for subset_manager in self.subset_managers.values():
+            if subset_manager.has_vm(vm): has_vm+=1
+        if has_vm == len(self.subset_managers): return True
+        if has_vm == 0: return False
+        raise ValueError('Invalid state encountered: VM unequally present in subsets ', vm.get_name(), has_vm)
 
     def __str__(self):
-        return str(self.cpu_subset_manager) + '\n' + str(self.mem_subset_manager) + '\n'
+        return ''.join([str(subset_manager) + '\n' for subset_manager in self.subset_managers.values()])

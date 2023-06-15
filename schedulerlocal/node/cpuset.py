@@ -175,6 +175,8 @@ class ServerCpuSet(object):
         List of CPU
     distances : dict()
         List of CPU
+    host_count: int
+        Count of CPU on host, without consideration on include/exclude list
 
     Public Methods
     -------
@@ -193,6 +195,7 @@ class ServerCpuSet(object):
         self.numa_distances = kwargs['numa_distances'] if 'numa_distances' in kwargs else None
         self.cpu_list = kwargs['cpu_list'] if 'cpu_list' in kwargs else list()
         self.distances = kwargs['distances'] if 'distances' in kwargs else dict()
+        self.host_count = kwargs['host_count'] if 'host_count' in kwargs else None
 
     def add_cpu(self, cpu : ServerCpu):
         """Add a ServerCpu object
@@ -243,6 +246,12 @@ class ServerCpuSet(object):
         self.cpu_list = list()
         for raw_cpu in raw_object['cpu_list']: self.cpu_list.append(ServerCpu(**raw_cpu))
         return self
+
+    def get_host_count(self):
+        """Return Count of CPU on host, without consideration on include/exclude list
+        ----------
+        """
+        return self.host_count
 
     def get_cpu_list(self):
         """Return CPU list

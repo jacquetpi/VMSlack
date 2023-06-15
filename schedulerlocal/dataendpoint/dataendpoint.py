@@ -2,12 +2,10 @@ from collections import defaultdict
 from influxdb_client import InfluxDBClient
 from dotenv import load_dotenv
 import os, json
-from schedulerlocal.subset.subset import Subset
-from schedulerlocal.subset.subsetmanager import SubsetManager
 from schedulerlocal.node.cpuexplorer import CpuExplorer
 from schedulerlocal.node.memoryexplorer import MemoryExplorer
 
-class Endpoint(object):
+class DataEndpoint(object):
     """
     An Endpoint is a class charged to store or retrieve subset data 
     Abstract class
@@ -18,63 +16,81 @@ class Endpoint(object):
     todo()
         todo
     """
-
-    def load_subset(self, timestamp : int, subset : Subset):
+    def load_subset(self, timestamp : int, subset):
         """Return subset resources usage. Must be reimplemented
         ----------
         """
         raise NotImplementedError()
 
-    def load_global(self, timestamp : int, manager : SubsetManager):
+    def load_global(self, timestamp : int, manager):
         """Return subset resources usage. Must be reimplemented
         ----------
         """
         raise NotImplementedError()
-
-    def fill_structure(self, timestamp : int, type : str, res : str, val : float,  uuid : str = None, cmn : str = None):
+    
+    @staticmethod
+    def record(tmp : int, rec : str, res : str, val : float, config : float,\
+            subset : str = None,\
+            sb_oc : str = None, sb_unused : float = None, sb_dsc : str = None,\
+            vm_uuid : str = None, vm_cmn : str = None):
         """Return data as structured dict
         ----------
 
         Parameters
         ----------
-        timestamp : int 
+        tmp : int 
             timestamp of data
-        type : str
-            vm, subset or global
+        rec : str
+            type of record. Possible options are vm, subset or global
         res :str
             Resource considered (e.g. cpu/mem...)
         val : float
             Value registered
         config : float
-            Max configuration 
+            Configuration Capacity
         subset : str (default to None)
-            If applicable, subset id
-        subset_oc:
-            If applicable, oc
-        uuid : str (default to None)
-            If applicable, UUID of consumer
-        cmn : str (default to None)
-            If applicable, common name of consumer
+            If applicable, subset id (VM/subset)
+        sb_oc: str (default to None)
+            If applicable, oversubscription (VM/subset)
+        sb_unused : float
+            If applicable, subset current unused res (subset)
+        sb_dsc : str
+            If applicable, subset json description (subset) 
+        vm_uuid : str (default to None)
+            If applicable, UUID of consumer (vm)
+        vm_cmn : str (default to None)
+            If applicable, common name of consumer (vm)
 
         Return
         ----------
         data : dict
             Data as dict
         """
-        return {'tmp':timestamp,\
-            'type': type,\
-            'res':res,\
-            'uuid':uuid,\
-            'cmn':cmn,\
-            'val':val}
+        if rec == 'subset':
+            if (subset == None) or (sb_oc == None) or (sb_unused == None) or (sb_dsc == None):
+                raise ValueError('Missing requirements parameters for subset record')
+        elif rec == 'vm':
+            if (subset == None) or (vm_uuid == None) or (vm_cmn == None) or (sb_oc == None):
+                raise ValueError('Missing requirements parameters for vm record')
+        elif rec != 'global':
+            raise ValueError('Unknow record' + rec)
+        return {'tmp':tmp, 'rec': rec, 'res':res, 'val':val, 'config':config,\
+            'subset':subset,\
+            'vm_uuid':vm_uuid, 'vm_cmn':vm_cmn,\
+            'sb_oc':sb_oc, 'sb_unused':sb_unused, 'sb_dsc':sb_dsc}
 
-    def store(self, data):
+    def get_record_keys(self):
+        # Create a fake record
+        rec = self.record(tmp=0,rec='global',res='res',val=0.0,config=0.0)
+        return list(rec.keys())
+
+    def store(self, record : dict):
         """Return available resources. Must be reimplemented
         ----------
         """
         raise NotImplementedError()
 
-class EndpointLive(Endpoint):
+class DataEndpointLive(DataEndpoint):
     """
     A live endpoint load data from the live system. It cannot store data
     ...
@@ -85,30 +101,21 @@ class EndpointLive(Endpoint):
         load resource usage and vm usage
     """
         
-    def load_subset(self, timestamp : int, subset : Subset):
+    def load_subset(self, timestamp : int, subset):
         """Return subset resources usage. Must be reimplemented
         ----------
         """
-        data_list = list()
         # Use subset explorer
-        data_list.append(self.fill_structure(timestamp=timestamp,\
-            subset='subset',\
-            res=subset.get_res_name(),
-            val=subset.get_current_resources_usage()))
+        subset_usage = subset.get_current_resources_usage()
         # Use libvirt connector
-        for consumer_uuid, consumer_tuple in subset.get_current_consumers_usage().items():
-            print()
-            consumer_obj, consumer_val = consumer_tuple
-            print(consumer_obj, consumer_val)
-        return data_list
+        vm_usage = subset.get_current_consumers_usage()
+        return subset_usage, vm_usage
 
-    def load_global(self, timestamp : int, manager : SubsetManager):
-        return self.fill_structure(timestamp=timestamp,\
-            subset='global',\
-            res=manager.get_res_name(),
-            val=manager.get_current_resources_usage()) # Use subset explorer
+    def load_global(self, timestamp : int, manager):
+        # Use subset explorer
+        return manager.get_current_resources_usage()
 
-class EndpointCSV(Endpoint):
+class DataEndpointCSV(DataEndpoint):
     """
     A CSV endpoint store and load data from a CSV file
     ...
@@ -118,17 +125,27 @@ class EndpointCSV(Endpoint):
     store()
         store
     """
-
     def __init__(self, **kwargs):
         req_attributes = ['input_file', 'output_file']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
+        self.keys = self.get_record_keys()
+        self.separator = '\t'
+        self.new_line  = '\n'
+        self.header = ''.join(self.separator + str(key) for key in self.keys)
+        self.header = self.header.replace(self.separator, '', 1) # remove first separator
+        if self.output_file is not None:
+            with open(self.output_file, 'w') as f: f.write(self.header + self.new_line)
 
-    def store(self, data):
-        print('received', data)
+    def store(self, record : dict):
+        if self.output_file is None: raise ValueError('No CSV output file specified')
+        line = ''.join([self.separator + str(record[key]) for key in self.keys])
+        line = line.replace(self.separator, '', 1) # remove first separator
+        with open(self.output_file, 'a') as f: 
+            f.write(line + self.new_line)
 
-class EndpointInfluxDB(Endpoint):
+class DataEndpointInfluxDB(DataEndpoint):
     """
     An InfluxDB endpoint store and load data from InfluxDB
     ...
@@ -154,12 +171,13 @@ class EndpointInfluxDB(Endpoint):
             print('Full stack trace is:\n')
             raise ex
 
-    def load(self, begin_epoch : int, end_epoch : int):
+    def load_subset(self, timestamp : int, subset):
         """TODO
         ----------
         """
+        end = timestamp + 1000
         query = ' from(bucket:"' + self.bucket + '")\
-        |> range(start: ' + str(begin_epoch) + ', stop: ' + str(end_epoch) + ')\
+        |> range(start: ' + str(timestamp) + ', stop: ' + str(end) + ')\
         |> filter(fn: (r) => r["_measurement"] == "domain")\
         |> filter(fn: (r) => r["url"] == "' + self.model_node_name + '")'
 
@@ -173,15 +191,15 @@ class EndpointInfluxDB(Endpoint):
                 if timestamp not in domains_data[domain_name]["time"]:
                     domains_data[domain_name]["time"].append(timestamp)
                 domains_data[domain_name][record.get_field()].append(record.get_value())
-        return domains_data
+        raise NotImplementedError()
 
-    def store():
+    def store(self, record : dict):
         """TODO
         ----------
         """
-        return 'todo'
+        raise NotImplementedError()
 
-class EndpointJson(Endpoint):
+class DataEndpointJson(DataEndpoint):
     """
     A Json endpoint store and load data from a json file
     ...
@@ -202,17 +220,23 @@ class EndpointJson(Endpoint):
             self.input_data = json.load(f)
         self.output_data = dict()
 
-    def load(self, begin_epoch : int, end_epoch : int):
+    def load_subset(self, timestamp : int, subset):
         """TODO
         ----------
         """
-        return self.input_data
+        raise NotImplementedError()
 
-    def store(self, data):
+    def load_global(self, timestamp : int, manager):
         """TODO
         ----------
         """
-        self.output_data = data
+        raise NotImplementedError()
+
+    def store(self, record : dict):
+        """TODO
+        ----------
+        """
+        raise NotImplementedError()
 
     def __del__(self):
         """Before destroying object, dump written data

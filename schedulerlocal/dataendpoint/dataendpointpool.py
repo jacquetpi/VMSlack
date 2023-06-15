@@ -1,4 +1,8 @@
-class EndpointPool(object):
+from schedulerlocal.dataendpoint.dataendpoint import DataEndpoint
+from schedulerlocal.node.jsonencoder import GlobalEncoder
+import json
+
+class DataEndpointPool(object):
     """
     An EndpointPool is a class composed of a loading endpoint and a saving endpoint
     ...
@@ -18,7 +22,7 @@ class EndpointPool(object):
             setattr(self, req_attribute, kwargs[req_attribute])
 
     def load_subset(self, timestamp, subset):
-        """Return subset data from the loader, while also storing to the saver if it is defined
+        """Return subset data (subset usage and vm usage) from the loader, while also storing to the saver if it is defined
         ----------
 
         Parameters
@@ -33,10 +37,25 @@ class EndpointPool(object):
         data : dict
             Data as dict
         """
-        data = self.load_subset_only(timestamp, subset)
+        subset_usage, vm_usage_dict = self.load_subset_only(timestamp, subset)
         if self.saver != None:
-            self.saver.store(data)
-        return data
+            # Subset record
+            self.saver.store(DataEndpoint.record(tmp=timestamp, rec='subset',\
+                res=subset.get_res_name(), val=subset_usage, config=subset.get_capacity(),\
+                subset='subset-' + str(subset.get_oversubscription_id()),\
+                sb_oc=str(subset.get_oversubscription_id()),\
+                sb_unused=subset.unused_resources_count(),\
+                sb_dsc=json.dumps(subset, cls=GlobalEncoder)))
+            # VM records
+            for vm_uuid, vm_tuple in vm_usage_dict.items():
+                vm_object, vm_usage = vm_tuple
+                self.saver.store(DataEndpoint.record(tmp=timestamp, rec='vm',\
+                    res=subset.get_res_name(), val=vm_usage, config=subset.get_vm_allocation(vm_object),\
+                    subset='subset-' + str(subset.get_oversubscription_id()),\
+                    sb_oc=subset.get_oversubscription_id(),\
+                    vm_uuid=vm_uuid,\
+                    vm_cmn=vm_object.get_name()))
+        return subset_usage, vm_usage_dict
 
     def load_subset_only(self, timestamp, subset):
         """Return subset data from the loader
@@ -74,7 +93,8 @@ class EndpointPool(object):
         """
         data = self.load_global_only(timestamp, subset_manager)
         if self.saver != None:
-            self.saver.store(data)
+            pass
+            #self.saver.store(DataEndpoint.record(data))
         return data
 
     def load_global_only(self, timestamp, subset_manager):
