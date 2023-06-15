@@ -606,7 +606,7 @@ class CpuSubset(Subset):
         template = self.connector.build_cpu_pinning(cpu_list=self.get_res(), host_config=self.cpu_count)
         for consumer in self.consumer_list:
             consumer.set_cpu_pin(template)
-            if consumer.is_deployed(): self.connector.update_cpu_pinning(vm=consumer, template_pin=template)
+            if consumer.is_deployed(): self.connector.update_cpu_pinning(vm=consumer)
 
     def __str__(self):
         return 'CpuSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\

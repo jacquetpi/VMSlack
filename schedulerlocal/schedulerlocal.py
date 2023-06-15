@@ -27,7 +27,6 @@ class SchedulerLocal:
     def run(self):
         """Run scheduler on specified tick value
         ----------
-
         """
         iteration_count = 0
         while True:

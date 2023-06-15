@@ -23,7 +23,10 @@ class LibvirtConnector(object):
         if not self.conn:
             raise SystemExit('Failed to open connection to ' + self.url)
         self.cache_entity = dict()
-        
+
+        with open('static/template-vm.xml', 'r') as f: self.template_vm = f.read()
+        self.qemu = '/usr/bin/qemu-system-x86_64'
+
     def get_vm_alive(self):
         """Retrieve list of VM being running currently as libvirt object
         ----------
@@ -115,31 +118,26 @@ class LibvirtConnector(object):
         self.cache_entity[uuid] = DomainEntity(uuid=uuid, name=name, mem=mem, cpu=cpu, cpu_pin=cpu_pin, cpu_ratio=cpu_ratio)
         return self.cache_entity[uuid]
 
-    def update_cpu_pinning(self, vm : DomainEntity, template_pin : tuple):
-        """Update the pinning of a VM to the list of cpuid if required
+    def update_cpu_pinning(self, vm : DomainEntity, virDomain : libvirt.virDomain = None):
+        """Update the pinning of a VM to its attribute cpu_pin
         ----------
 
         Parameters
         ----------
-        vm_uuid : str
-            VM identifier
-        template_pin : tuple
-            libvirt pinning template
+        vm : DomainEntity
+            VM model
+        virDomain : virDomain
+            Libvirt model (retrieve if based on uuid if not specified)
         """
         # Retrieve VM
-        virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
-        vm_pin       = virDomain.vcpuPinInfo()
-    
-        # Test if update is needed
-        update_needed = False
-        for vcpu_pin in vm_pin:
-            if vcpu_pin != template_pin: 
-                update_needed = True
-                break
-
+        if virDomain == None: virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
+        vm_pin_current = virDomain.vcpuPinInfo()
+        vm_pin_model   = vm.get_cpu_pin()
+        
         # Update
-        if update_needed: 
-            for vcpu in range(len(vm_pin)): virDomain.pinVcpu(vcpu, template_pin)
+        for vcpu, cpu_pin_current in enumerate(vm_pin_current):
+            if cpu_pin_current != vm_pin_model[vcpu]:
+                virDomain.pinVcpu(vcpu, vm_pin_model[vcpu])
 
     def build_cpu_pinning(self, cpu_list : list, host_config : int):
         """Return Libvirt template of cpu pinning based on authorised list of cpu
@@ -221,6 +219,36 @@ class LibvirtConnector(object):
         usage = stats['rss']/stats['actual']
         if usage>1: return 1
         return usage
+
+    def create_vm(self, vm : DomainEntity):
+        """Create a VM based on its DomainEntity description
+        ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+           VM to consider
+
+        Returns
+        -------
+        success : bool
+            Success as True/False
+        """
+        if vm.is_deployed(): raise ValueError('VM already exists')
+        vm_xml = self.template_vm.replace('{name}', vm.get_name()).\
+                replace('{cpu}', str(vm.get_cpu())).\
+                replace('{mem}', str(vm.get_mem(as_kb=True))).\
+                replace('{oc_cpu}', str(vm.get_cpu_ratio())).\
+                replace('{oc_mem}', str(1.0)).\
+                replace('{qemu}', self.qemu).\
+                replace('{qcow2}', vm.get_qcow2())
+        try:
+            dom = self.conn.defineXML(vm_xml)
+        except libvirt.libvirtError as ex:
+            return False
+         
+        self.update_cpu_pinning(vm=vm,virDomain=dom) # TODO: persist cpupin on xml desc? Is it useful?
+        return True
 
     def __del__(self):
         """Clean up actions

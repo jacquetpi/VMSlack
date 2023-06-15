@@ -67,16 +67,17 @@ class ApiEndpoint(object):
         """/deploy uri : deploying a new VM
         ----------
         """
-        usage = 'Wrong usage: http://' + self.api_url + ':' + str(self.api_port) + '/deploy?name=name&cpu=cpu&mem=mem&oc=oc'
+        usage = 'Wrong usage: http://' + self.api_url + ':' + str(self.api_port) + '/deploy?name=example&cpu=1&mem=1&oc=1&qcow2=/var/lib/libvirt/images/volume.qcow2'
 
-        args_required = ['name', 'cpu', 'mem', 'oc']
+        args_required = ['name', 'cpu', 'mem', 'oc', 'qcow2']
         for arg in args_required:
             if request.args.get(arg) is None: return usage
         name = request.args.get('name')
         cpu  = int(request.args.get('cpu'))
-        mem  = int(request.args.get('mem'))*(1024**2) # from GB to KB
+        mem  = int(float(request.args.get('mem'))*(1024**2)) # from GB to KB
         oc   = float(request.args.get('oc'))
-        vm_to_create = DomainEntity(name=name, cpu=cpu, mem=mem, cpu_ratio=oc)
+        qcow2 = str(request.args.get('qcow2'))
+        vm_to_create = DomainEntity(name=name, cpu=cpu, mem=mem, cpu_ratio=oc, qcow2=qcow2)
         
         return  'Success: ' + str(self.subset_manager_pool.deploy(vm_to_create)) + '<br>' + str(vm_to_create)
 

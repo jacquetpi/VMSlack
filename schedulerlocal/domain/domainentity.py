@@ -28,7 +28,7 @@ class DomainEntity:
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
-        opt_attributes = ['uuid', 'cpu_pin']
+        opt_attributes = ['uuid', 'cpu_pin', 'qcow2']
         for opt_attribute in opt_attributes:
             if opt_attribute in kwargs:
                 setattr(self, opt_attribute, kwargs[opt_attribute])
@@ -92,6 +92,12 @@ class DomainEntity:
         ----------
         """
         return self.cpu_ratio
+
+    def get_qcow2(self):
+        """Return disk location on host
+        ----------
+        """
+        return self.qcow2
 
     def has_time(self):
         """Return if CPU times were initialised

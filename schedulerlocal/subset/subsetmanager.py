@@ -748,8 +748,10 @@ class SubsetManagerPool(object):
                 success = False
                 break
             treated.append(subset_manager)
+        # If we succeed, the DOA DomainEntity was adapted according to the need of all subsetsManager. We apply changes using the connector  
+        if success: success = self.connector.create_vm(vm)
         if success: return success
-        # If one failed, we have to remove VM from others subset
+        # If one step failed, we have to remove VM from others subset
         for subset_manager in treated: 
             if not subset_manager.remove(vm): raise ValueError('Invalid state encountered')
         return success
@@ -783,7 +785,7 @@ class SubsetManagerPool(object):
         self.watch_out_of_schedulers_vm()
         for subset_manager in self.subset_managers.values():
             subset_manager.update_monitoring(timestamp=timestamp)
-            print(subset_manager)
+        print(self)
 
     def watch_out_of_schedulers_vm(self):
         """Treat VM deployed without passing by scheduler as deployment
