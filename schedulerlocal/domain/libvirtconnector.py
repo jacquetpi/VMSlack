@@ -253,8 +253,8 @@ class LibvirtConnector(object):
 
         Returns
         -------
-        success : bool
-            Success as True/False
+        tuple : (bool, reason)
+            Success as True/False with reason
         """
         if vm.is_deployed(): raise ValueError('VM already exists')
         vm_xml = self.template_vm.replace('{name}', vm.get_name()).\
@@ -272,18 +272,18 @@ class LibvirtConnector(object):
         try:
             virDomain = self.conn.defineXML(cputune_xml.convert_to_str_xml())
             virDomain.create()
-        except libvirt.libvirtError as ex:
+        except libvirt.libvirtError as ex1:
             try:
                 if virDomain != None: virDomain.undefine()
-            except libvirt.libvirtError as ex: 
+            except libvirt.libvirtError as ex2: 
                 pass
-            return False
+            return (False, str(ex1))
 
         try:
             vm.set_uuid(virDomain.UUIDString())
         except libvirt.libvirtError as ex: 
-            return False
-        return True
+            return (False, str(ex))
+        return (True, None)
 
     def delete_vm(self, vm : DomainEntity):
         """Delete a VM
@@ -296,19 +296,19 @@ class LibvirtConnector(object):
 
         Returns
         -------
-        success : bool
-            Success as True/False
+        tuple : (bool, reason)
+            Success as True/False with reason
         """
         try:
             virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
         except libvirt.libvirtError as ex: # Already deleted
-            return True
+            return (True, None)
         try:
             virDomain.destroy()
             virDomain.undefine()
         except libvirt.libvirtError as ex:
-            return False
-        return True
+            return (False, str(ex))
+        return (True, None)
 
     def __del__(self):
         """Clean up actions

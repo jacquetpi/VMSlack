@@ -763,23 +763,26 @@ class SubsetManagerPool(object):
 
         Returns
         -------
-        success : bool
-            Return success status of operation
+        tuple : (bool, reason)
+            Success as True/False with reason
         """
         treated = list()
         success = True
+        reason = None
         for subset_manager in self.subset_managers.values():
             if not subset_manager.deploy(vm): 
                 success = False
+                reason = 'Not enough space on res ' + subset_manager.get_res_name()
                 break
             treated.append(subset_manager)
-        # If we succeed, the DOA DomainEntity was adapted according to the need of all subsetsManager. We apply changes using the connector  
-        if success and not vm.is_deployed(): success = self.connector.create_vm(vm)
-        if success: return success
+        # If we succeed, the DOA DomainEntity was adapted according to the need of all subsetsManager. We apply changes using the connector
+        if success and not vm.is_deployed():
+            success, reason = self.connector.create_vm(vm)
+        if success: return (success, reason)
         # If one step failed, we have to remove VM from others subset
         for subset_manager in treated: 
             if not subset_manager.remove(vm): raise ValueError('Invalid state encountered')
-        return success
+        return (success, reason)
 
     def remove(self, vm : DomainEntity = None, name : str = None):
         """Remove a VM from subset managers
@@ -794,11 +797,11 @@ class SubsetManagerPool(object):
 
         Returns
         -------
-        success : bool
-            Return success status of operation
+        tuple : (bool, reason)
+            Success as True/False with reason
         """
         if name != None: vm = self.get_vm_by_name(name)
-        if vm == None: return False
+        if vm == None: return (False, 'does not exist')
         vm.set_being_destroyed(True)
         print(vm.is_being_destroyed())
         treated = list()
@@ -813,11 +816,11 @@ class SubsetManagerPool(object):
             vm.set_being_destroyed(False)
             raise ValueError('Invalid state encountered')
         # second, remove from connector
-        success = self.connector.delete_vm(vm)
+        (success, reason) = self.connector.delete_vm(vm)
         if success:
             del vm
-            return True
-        else: return False
+            return (success, reason)
+        else: return (success, reason)
 
     def watch_out_of_schedulers_vm(self):
         """Treat VM deployed without passing by scheduler as deployment
@@ -826,8 +829,8 @@ class SubsetManagerPool(object):
         for vm in self.connector.get_vm_alive_as_entity():
             if vm.is_being_destroyed(): continue
             if not self.has_vm(vm):
-                success = self.deploy(vm)
-                print('Warning: VM deployed out of scope of this scheduler detected ', vm.get_name(), ' was integred:', success)
+                success_tuple = self.deploy(vm)
+                print('Warning: VM deployed out of scope of this scheduler detected ', vm.get_name(), ' was integred:', success_tuple)
 
     def has_vm(self, vm : DomainEntity):
         """Test if a VM is present in subsetManagers

@@ -1,9 +1,6 @@
 <domain type='kvm'>
   <name>{name}</name>
-    <metadata>
-    <libosinfo:libosinfo xmlns:libosinfo="http://libosinfo.org/xmlns/libvirt/domain/1.0">
-      <libosinfo:os id="http://alpinelinux.org/alpinelinux/3.14"/>
-    </libosinfo:libosinfo>
+  <metadata>
     <sched:ratio xmlns:sched="1.0.0" cpu="{oc_cpu}" mem="{oc_mem}" disk="1.0" network="1.0"/>
   </metadata>
   <memory unit='KiB'>{mem}</memory>
@@ -64,6 +61,11 @@
     <controller type='virtio-serial' index='0'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
     </controller>
+    <interface type="network">
+      <source network="default"/>
+      <model type="virtio"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x00" function="0x0"/>
+    </interface>
     <serial type='pty'>
       <target type='isa-serial' port='0'>
         <model name='isa-serial'/>
