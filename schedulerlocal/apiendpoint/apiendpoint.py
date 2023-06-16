@@ -85,7 +85,13 @@ class ApiEndpoint(object):
         """/remove uri : Remove a VM identified by its name
         ----------
         """
-        return 'TODO'
+        usage = 'Wrong usage: http://' + self.api_url + ':' + str(self.api_port) + '/remove?name=example'
+
+        args_required = ['name']
+        for arg in args_required:
+            if request.args.get(arg) is None: return usage
+        name = request.args.get('name')
+        return  'Success: ' + str(self.subset_manager_pool.remove(name=name)) + '<br>' + name
 
     def shutdown(self):
         """Manage thread shutdown

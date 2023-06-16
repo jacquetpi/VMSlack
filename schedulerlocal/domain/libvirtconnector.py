@@ -1,5 +1,5 @@
 import libvirt, time
-from schedulerlocal.domain.libvirtxmlmodifier import xmlDomainNuma, xmlDomainMetaData
+from schedulerlocal.domain.libvirtxmlmodifier import xmlDomainNuma, xmlDomainMetaData, xmlDomainCputune
 from schedulerlocal.domain.domainentity import DomainEntity
 
 class LibvirtConnector(object):
@@ -36,7 +36,14 @@ class LibvirtConnector(object):
         vm_alive : list
             list of virDomain
         """
-        return [self.conn.lookupByID( vmid ) for vmid in self.conn.listDomainsID()]
+        res = list()
+        for domain_id in self.conn.listDomainsID():
+            try:
+                virDomain = self.conn.lookupByID(domain_id)
+                res.append(virDomain)
+            except libvirt.libvirtError as ex:  # VM is not alived anymore
+                pass
+        return res
 
     def get_vm_alive_as_entity(self):
         """Retrieve list of VM being running currently as DomainEntity object
@@ -47,7 +54,11 @@ class LibvirtConnector(object):
         vm_alive : list
             list of DomainEntity
         """ 
-        return [self.convert_to_entitydomain(virDomain=vm_virDomain) for vm_virDomain in self.get_vm_alive()]
+        res = list()
+        for virDomain in self.get_vm_alive():
+            vm = self.convert_to_entitydomain(virDomain=virDomain)
+            if vm != None: res.append(vm)
+        return res
 
     def get_vm_shutdown(self):
         """Retrieve list of VM being shutdown currently as libvirt object
@@ -58,7 +69,14 @@ class LibvirtConnector(object):
         vm_shutdown : list
             list of virDomain
         """
-        return [self.conn.lookupByName(name) for name in self.conn.listDefinedDomains()]
+        res = list()
+        for domain_name in self.conn.listDefinedDomains():
+            try:
+                virDomain = self.conn.lookupByName(domain_name)
+                res.append(virDomain)
+            except libvirt.libvirtError as ex:  # VM is not defined anymore
+                pass
+        return res
 
     def get_all_vm(self):
         """Retrieve list of all VM
@@ -72,16 +90,6 @@ class LibvirtConnector(object):
         vm_list = self.get_vm_alive()
         vm_list.extend(self.get_vm_shutdown())
         return vm_list
-
-    def print_vm_topology(self):
-        """Print all VM topology
-        ----------
-
-        """
-        for domain in self.get_vm_alive():
-            domain_xml = xmlDomainNuma(xml_as_str=domain.XMLDesc())
-            print(domain_xml.convert_to_str_xml())
-            #self.conn.defineXML(domain_xml.convert_to_str_xml())
 
     def convert_to_entitydomain(self, virDomain : libvirt.virDomain, force_update = False):
         """Convert the libvirt virDomain object to the domainEntity domain
@@ -99,20 +107,24 @@ class LibvirtConnector(object):
         domain : DomainEntity
             domain as DomainEntity object
         """
-        # Cache management
-        uuid = virDomain.UUIDString()
-        if (not force_update) and uuid in self.cache_entity: return self.cache_entity[uuid]
-        # General info
-        name = virDomain.name()
-        mem = virDomain.maxMemory()
-        cpu = virDomain.maxVcpus()
-        cpu_pin = virDomain.vcpuPinInfo()
-        # Custom metadata
-        xml_manager = xmlDomainMetaData(xml_as_str=virDomain.XMLDesc())
-        xml_manager.convert_to_object()
-        if xml_manager.updated() : 
-            self.conn.defineXML(xml_manager.convert_to_str_xml()) # Will only be applied after a restart
-            print('Warning, no oversubscription found on domain', name, ': defaults were generated')
+        cpu_pin = None
+        try:
+            # Cache management
+            uuid = virDomain.UUIDString()
+            if (not force_update) and uuid in self.cache_entity: return self.cache_entity[uuid]
+            # General info
+            name = virDomain.name()
+            mem = virDomain.maxMemory()
+            cpu = virDomain.maxVcpus()
+            cpu_pin = virDomain.vcpuPinInfo()
+            # Custom metadata
+            xml_manager = xmlDomainMetaData(xml_as_str=virDomain.XMLDesc())
+            xml_manager.convert_to_object()
+            if xml_manager.updated() : 
+                self.conn.defineXML(xml_manager.convert_to_str_xml()) # Will only be applied after a restart
+                print('Warning, no oversubscription found on domain', name, ': defaults were generated')
+        except libvirt.libvirtError as ex:  # VM is not alived anymore
+            return None
         cpu_ratio = xml_manager.get_oversub_ratios()['cpu']
         # Build entity
         self.cache_entity[uuid] = DomainEntity(uuid=uuid, name=name, mem=mem, cpu=cpu, cpu_pin=cpu_pin, cpu_ratio=cpu_ratio)
@@ -130,14 +142,24 @@ class LibvirtConnector(object):
             Libvirt model (retrieve if based on uuid if not specified)
         """
         # Retrieve VM
-        if virDomain == None: virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
-        vm_pin_current = virDomain.vcpuPinInfo()
-        vm_pin_model   = vm.get_cpu_pin()
-        
-        # Update
-        for vcpu, cpu_pin_current in enumerate(vm_pin_current):
-            if cpu_pin_current != vm_pin_model[vcpu]:
-                virDomain.pinVcpu(vcpu, vm_pin_model[vcpu])
+        vm_pin_current = None
+        try:
+            if virDomain == None: virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
+            vm_pin_current = virDomain.vcpuPinInfo()
+            vm_pin_model   = vm.get_cpu_pin()
+
+            for vcpu, cpu_pin_current in enumerate(vm_pin_current):
+                if cpu_pin_current != vm_pin_model[vcpu]:
+                    virDomain.pinVcpu(vcpu, vm_pin_model[vcpu]) # Live setting
+        except libvirt.libvirtError as ex:  # VM is not alived anymore
+            pass
+        # Update XML desc
+        try:
+            host_config = len(vm.get_cpu_pin()[0])
+            cputune_xml = xmlDomainCputune(xml_as_str=virDomain.XMLDesc(), host_config=host_config, cpupin_per_vcpu=vm.get_cpu_pin())
+            virDomain = self.conn.defineXML(cputune_xml.convert_to_str_xml())
+        except libvirt.libvirtError as ex:
+            pass
 
     def build_cpu_pinning(self, cpu_list : list, host_config : int):
         """Return Libvirt template of cpu pinning based on authorised list of cpu
@@ -180,9 +202,9 @@ class LibvirtConnector(object):
         cpu_usage : float
             Usage as [0;1]
         """
-        virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
-        epoch_ns = time.time_ns()
         try:
+            virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
+            epoch_ns = time.time_ns()
             stats = virDomain.getCPUStats(total=True)
         except libvirt.libvirtError as ex:  # VM is not alived
             raise ConsumerNotAlived()
@@ -210,8 +232,8 @@ class LibvirtConnector(object):
         cpu_usage : float
             Usage as [0;1]
         """
-        virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
         try:
+            virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
             stats = virDomain.memoryStats()
         except libvirt.libvirtError as ex:  # VM is not alived
             raise ConsumerNotAlived()
@@ -242,19 +264,60 @@ class LibvirtConnector(object):
                 replace('{oc_mem}', str(1.0)).\
                 replace('{qemu}', self.qemu).\
                 replace('{qcow2}', vm.get_qcow2())
+        
+        # Dynamically add cpupin related data to xml desc
+        host_config = len(vm.get_cpu_pin()[0])
+        cputune_xml = xmlDomainCputune(xml_as_str=vm_xml, host_config=host_config, cpupin_per_vcpu=vm.get_cpu_pin())
+        virDomain = None
         try:
-            dom = self.conn.defineXML(vm_xml)
+            virDomain = self.conn.defineXML(cputune_xml.convert_to_str_xml())
+            virDomain.create()
+        except libvirt.libvirtError as ex:
+            try:
+                if virDomain != None: virDomain.undefine()
+            except libvirt.libvirtError as ex: 
+                pass
+            return False
+
+        try:
+            vm.set_uuid(virDomain.UUIDString())
+        except libvirt.libvirtError as ex: 
+            return False
+        return True
+
+    def delete_vm(self, vm : DomainEntity):
+        """Delete a VM
+        ----------
+
+        Parameters
+        ----------
+        vm : DomainEntity
+           VM to consider
+
+        Returns
+        -------
+        success : bool
+            Success as True/False
+        """
+        try:
+            virDomain = self.conn.lookupByUUIDString(vm.get_uuid())
+        except libvirt.libvirtError as ex: # Already deleted
+            return True
+        try:
+            virDomain.destroy()
+            virDomain.undefine()
         except libvirt.libvirtError as ex:
             return False
-         
-        self.update_cpu_pinning(vm=vm,virDomain=dom) # TODO: persist cpupin on xml desc? Is it useful?
         return True
 
     def __del__(self):
         """Clean up actions
         ----------
         """
-        self.conn.close()
+        try:
+            self.conn.close()
+        except libvirt.libvirtError as ex:
+            pass
 
 class ConsumerNotAlived(Exception):
     pass

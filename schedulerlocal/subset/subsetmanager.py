@@ -81,6 +81,22 @@ class SubsetManager(object):
         """
         return self.collection.has_vm(vm)
 
+    def get_vm_by_name(self, name : str):
+        """Get a vm by its name, none if not present
+        ----------
+
+        Parameters
+        ----------
+        name : str
+            The name to search for
+
+        Returns
+        -------
+        vm : DomainEntity
+            None if not present
+        """
+        return self.collection.get_vm_by_name(name)
+
     def __try_to_deploy_on_existing_subset(self,  vm : DomainEntity):
         """Try to deploy a VM to an existing subset by extending it if required 
         ----------
@@ -727,6 +743,15 @@ class SubsetManagerPool(object):
             'mem': MemSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, memset=self.memset)
             }
 
+    def iterate(self, timestamp : int):
+        """Iteration
+        ----------
+        """
+        self.watch_out_of_schedulers_vm()
+        for subset_manager in self.subset_managers.values():
+            subset_manager.update_monitoring(timestamp=timestamp)
+        print(self)
+
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on subset managers
         ----------
@@ -749,49 +774,57 @@ class SubsetManagerPool(object):
                 break
             treated.append(subset_manager)
         # If we succeed, the DOA DomainEntity was adapted according to the need of all subsetsManager. We apply changes using the connector  
-        if success: success = self.connector.create_vm(vm)
+        if success and not vm.is_deployed(): success = self.connector.create_vm(vm)
         if success: return success
         # If one step failed, we have to remove VM from others subset
         for subset_manager in treated: 
             if not subset_manager.remove(vm): raise ValueError('Invalid state encountered')
         return success
 
-    def remove(self, vm : DomainEntity):
+    def remove(self, vm : DomainEntity = None, name : str = None):
         """Remove a VM from subset managers
         ----------
         
         Parameters
         ----------
         vm : DomainEntity
-            The VM to deploy
+            The VM to remove identified as DomainEntity
+        name : str
+            The VM to remove identified by its name
 
         Returns
         -------
         success : bool
             Return success status of operation
         """
+        if name != None: vm = self.get_vm_by_name(name)
+        if vm == None: return False
+        vm.set_being_destroyed(True)
+        print(vm.is_being_destroyed())
         treated = list()
         success = True
+        # First, remove from subsets
         for subset_manager in self.subset_managers.values():
-            if not subset_manager.deploy(vm): 
+            if not subset_manager.remove(vm): 
                 success = False
                 break
             treated.append(subset_manager)
-        if not success and treated: raise ValueError('Invalid state encountered')
-        return success
-
-    def iterate(self, timestamp : int):
-        # Manage monitoring
-        self.watch_out_of_schedulers_vm()
-        for subset_manager in self.subset_managers.values():
-            subset_manager.update_monitoring(timestamp=timestamp)
-        print(self)
+        if not success and treated: 
+            vm.set_being_destroyed(False)
+            raise ValueError('Invalid state encountered')
+        # second, remove from connector
+        success = self.connector.delete_vm(vm)
+        if success:
+            del vm
+            return True
+        else: return False
 
     def watch_out_of_schedulers_vm(self):
         """Treat VM deployed without passing by scheduler as deployment
         ----------
         """
         for vm in self.connector.get_vm_alive_as_entity():
+            if vm.is_being_destroyed(): continue
             if not self.has_vm(vm):
                 success = self.deploy(vm)
                 print('Warning: VM deployed out of scope of this scheduler detected ', vm.get_name(), ' was integred:', success)
@@ -816,6 +849,30 @@ class SubsetManagerPool(object):
         if has_vm == len(self.subset_managers): return True
         if has_vm == 0: return False
         raise ValueError('Invalid state encountered: VM unequally present in subsets ', vm.get_name(), has_vm)
+
+    def get_vm_by_name(self, name : str):
+        """Get a vm by its name, none if not present
+        ----------
+
+        Parameters
+        ----------
+        name : str
+            The name to search for
+
+        Returns
+        -------
+        vm : DomainEntity
+            None if not present
+        """
+        found = None
+        has_vm = 0
+        for subset_manager in self.subset_managers.values():
+            vm = subset_manager.get_vm_by_name(name)
+            if vm != None: 
+                has_vm+=1
+                found = vm
+        if (has_vm != len(self.subset_managers)) and (has_vm == 0): raise ValueError('Invalid state encountered: VM unequally present in subsets ', vm.get_name(), has_vm)
+        return found
 
     def __str__(self):
         return ''.join([str(subset_manager) + '\n' for subset_manager in self.subset_managers.values()])

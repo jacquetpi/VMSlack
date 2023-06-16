@@ -430,12 +430,12 @@ class xmlDomainCputunePin(xmlObject):
         Return vcpupin cell XML element
     """
 
-    def __init__(self, dom_cputune : minidom.Element, xml_as_document = None, xml_as_str = None, vcpu : int = None, cpu_template : tuple = None):
+    def __init__(self, dom_cputune : minidom.Element, host_config : int, xml_as_document = None, xml_as_str = None, vcpu : int = None, cpu_template : tuple = None):
+        self.dom_cputune = dom_cputune
+        self.host_config = host_config # number of cpu on host
         self.vcpu = vcpu
         self.cpu_template = cpu_template
-        self.dom_cputune = dom_cputune
         super().__init__(xml_as_document=xml_as_document,xml_as_str=xml_as_str)
-
 
     def get_dom_specific(self, dom_root : minidom.Document):
         """Return Numa cell XML element (create it if not present)
@@ -446,7 +446,6 @@ class xmlDomainCputunePin(xmlObject):
             the document to consider while searching element
         """
         dom_vcpupin_list = self.dom_cputune.getElementsByTagName('vcpupin')
-        
         dom_vcpupin = None
         for dom_vcpupin_tested in dom_vcpupin_list:
             if dom_vcpupin_tested.getAttribute('vcpu') == str(self.vcpu):
@@ -454,22 +453,66 @@ class xmlDomainCputunePin(xmlObject):
                 break
 
         if dom_vcpupin == None:
-            dpm_vcpupin = self.__generate_vcpupin_based_on_cpuset()
+            dom_vcpupin =  dom_root.createElement('vcpupin')
+            self.update_dom(dom_vcpupin)
+            self.dom_cputune.appendChild(dom_vcpupin)
 
         return dom_vcpupin
 
-    def __generate_vcpupin_based_on_cpuset(self):
-        raise NotImplementedError()
+    def convert_to_object(self):
+        """Using xml attribute, convert xml data related to numa cell to object attributes.
+        ----------
+        """
+        dom_vcpupin = self.get_dom_specific(self.get_dom_root())
+
+        self.vcpu = dom_vcpupin.getAttribute('vcpu')
+        self.cpu_template = self.__get_cpu_template_from_regex(dom_vcpupin.getAttribute('cpuset'))
 
     def update_dom(self, dom_targeted : minidom.Element):
-        """Using current object numa cell attributes, update xml document
+        """Using current object attributes, update xml document
         
         Parameters
         ----------
         dom_targeted : minidom.Document
             the document to consider while updating attributes
         """
-        for attribute in self._cell_attributes : dom_targeted.setAttribute(attribute, self.cells[attribute])
+        dom_targeted.setAttribute('vcpu', str(self.vcpu))
+        dom_targeted.setAttribute('cpuset', self.__get_cpuset_as_regex())
+
+    def __get_cpuset_as_regex(self):
+        """Using cpu template attribute, return the equivalent regex expression
+        
+        Return
+        ----------
+        regex : str
+            CPU authorized in regex form
+        """
+        cpuset_str = ''.join([',' + str(cpuid) if is_pinned else '' for cpuid, is_pinned in enumerate(self.cpu_template)])
+        return cpuset_str.replace(',', '', 1) # remove first coma
+
+    def __get_cpu_template_from_regex(self, regex_cpu :str):
+        """Using regex str, return the equivalent cpu template
+        
+        Return
+        ----------
+        template : tuple
+            CPU authorized in tuple form
+        """
+        self.cpu_template = [False for i in range(self.host_config)]
+        for cpuid in regex_cpu.split(','): self.cpu_template[int(cpuid)] = True
+        return tuple(self.cpu_template) # convert list to tuple
+
+    def get_vcpu(self):
+        """Getter on vcpu attribute
+        ----------
+        """
+        return self.vcpu
+
+    def get_cpu_template(self):
+        """Getter on cpu template
+        ----------
+        """
+        return self.cpu_template
 
 class xmlDomainCputune(xmlObject):
     """
@@ -486,7 +529,8 @@ class xmlDomainCputune(xmlObject):
         Return cputune XML element
     """
 
-    def __init__(self, xml_as_document = None, xml_as_str = None, cpupin_per_vcpu : list = None):
+    def __init__(self, host_config : int, xml_as_document = None, xml_as_str = None, cpupin_per_vcpu : list = None):
+        self.host_config = host_config
         self.cpupin_per_vcpu = cpupin_per_vcpu
         self.vcpupin_list = list()
         super().__init__(xml_as_document=xml_as_document,xml_as_str=xml_as_str)
@@ -500,18 +544,30 @@ class xmlDomainCputune(xmlObject):
             the document to consider while searching element
         """
         # Focus on metadata node
-        dom_cputune_list =  dom_root.getElementsByTagName("cputune")
+        dom_cputune_list =  dom_root.getElementsByTagName('cputune')
         if len(dom_cputune_list) > 1: 
-            raise ValueError("Incorrect number of cputune node in xml", len(dom_cputune_list))
+            raise ValueError('Incorrect number of cputune node in xml', len(dom_cputune_list))
         elif len(dom_cputune_list) == 0:
+            # Retrieve domain
+            dom_domain_list =  dom_root.getElementsByTagName('domain')
+            if len(dom_domain_list) !=1: raise ValueError('Incorrect number of domain node in xml', len(dom_domain_list))
             dom_cputune =  dom_root.createElement('cputune')
-            dom_root.appendChild(dom_cputune)
-            for vcpu, cpu_template in enumerate(self.cpupin_per_vcpu): self.vcpupin_list.append(xmlDomainCputunePin(xml_as_document=dom_root, vcpu=vcpu, cpu_template=cpu_template))
+            dom_domain_list[0].appendChild(dom_cputune)
+            for vcpu, cpu_template in enumerate(self.cpupin_per_vcpu): 
+                self.vcpupin_list.append(xmlDomainCputunePin(xml_as_document=dom_root, dom_cputune=dom_cputune, host_config=self.host_config, vcpu=vcpu, cpu_template=cpu_template))
         else: dom_cputune = dom_cputune_list[0]
         return dom_cputune
-            
+
+    def convert_to_object(self):
+        """Using xml attribute, convert xml data related to cputune node to object attributes.
+        ----------
+        """
+        self.vcpupin_list = list()
+        for vcpupin in self.vcpupin_list: 
+            vcpupin.append(self.vcpupin.get_cpu_template())
+
     def update_dom(self, dom_targeted : minidom.Element):
-        """Using current object numa attributes, update xml document
+        """Using current object cpututne attributes, update xml document
         
         Parameters
         ----------
@@ -519,8 +575,13 @@ class xmlDomainCputune(xmlObject):
             the document to consider while updating attributes
         """
         if dom_targeted==None: dom_targeted=self.get_dom_specific()
-        # Update current object
-        for attribute in self._topology_attributes : dom_targeted.setAttribute(attribute, self.topology[attribute])
         # Update child objects
-        for numa_cell in self.numa_cells: numa_cell.update_dom(dom_targeted=numa_cell.get_dom_specific(numa_cell.get_dom_root()))
+        for vcpupin in self.vcpupin_list: 
+            vcpupin.update_dom(dom_targeted=vcpupin.get_dom_specific(vcpupin.get_dom_root()))
         return dom_targeted
+
+    def get_cpupin_per_vcpu(self):
+        """Getter on cpupin_per_vcpu attribute
+        ----------
+        """
+        return self.cpupin_per_vcpu

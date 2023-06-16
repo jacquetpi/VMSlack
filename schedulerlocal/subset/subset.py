@@ -100,8 +100,28 @@ class Subset(object):
             Return success status of operation
         """
         for consumer in self.consumer_list:
-            if consumer.get_uuid() == vm.get_uuid(): return True
+            if consumer.get_uuid() == None:
+                if consumer.get_name() == vm.get_name(): return True
+            elif consumer.get_uuid() == vm.get_uuid(): return True
         return False
+
+    def get_vm_by_name(self, name : str):
+        """Get a vm by its name, none if not present
+        ----------
+
+        Parameters
+        ----------
+        name : str
+            The name to search for
+
+        Returns
+        -------
+        vm : DomainEntity
+            None if not present
+        """
+        for consumer in self.consumer_list:
+            if consumer.get_name() == name: return consumer
+        return None
 
     def get_res_name(self):
         """Get resource name managed by susbset. Resource dependant. Must be reimplemented
@@ -476,6 +496,25 @@ class SubsetCollection(object):
         for subset in self.subset_dict.values(): 
             if subset.has_vm(vm): return True
         return False
+
+    def get_vm_by_name(self, name : str):
+        """Get a vm by its name, none if not present
+        ----------
+
+        Parameters
+        ----------
+        name : str
+            The name to search for
+
+        Returns
+        -------
+        vm : DomainEntity
+            None if not present
+        """
+        for subset in self.subset_dict.values():
+            vm = subset.get_vm_by_name(name)
+            if vm != None: return vm
+        return None
 
     def update_monitoring(self, timestamp : int):
         """Order a monitoring session on each subset with specified timestamp key

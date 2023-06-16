@@ -33,12 +33,31 @@ class DomainEntity:
             if opt_attribute in kwargs:
                 setattr(self, opt_attribute, kwargs[opt_attribute])
             else: setattr(self, opt_attribute, None)
+        self.being_destroyed = False
 
     def get_uuid(self):
         """Return VM uuid
         ----------
         """
         return self.uuid
+
+    def is_being_destroyed(self):
+        """Return VM is_being_destroyed attribute
+        ----------
+        """
+        return self.being_destroyed
+
+    def set_being_destroyed(self, being_destroyed : bool):
+        """Set VM is_being_destroyed attribute
+        ----------
+        """
+        self.being_destroyed=being_destroyed
+
+    def set_uuid(self, uuid :str):
+        """set VM uuid
+        ----------
+        """
+        self.uuid = uuid
 
     def is_deployed(self):
         """Return if VM is deployed
