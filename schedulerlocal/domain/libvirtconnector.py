@@ -270,6 +270,7 @@ class LibvirtConnector(object):
         cputune_xml = xmlDomainCputune(xml_as_str=vm_xml, host_config=host_config, cpupin_per_vcpu=vm.get_cpu_pin())
         virDomain = None
         try:
+            print(cputune_xml.convert_to_str_xml())
             virDomain = self.conn.defineXML(cputune_xml.convert_to_str_xml())
             virDomain.create()
         except libvirt.libvirtError as ex1:
