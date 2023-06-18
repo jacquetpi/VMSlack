@@ -33,7 +33,7 @@ class Subset(object):
         Count resources in subset
     """
     def __init__(self, **kwargs):
-        self.oversubscription = SubsetOversubscriptionStatic(subset=self, ratio=kwargs['oversubscription'])
+        self.oversubscription = SubsetOversubscriptionStatic(subset=self, ratio=kwargs['oversubscription'], critical_size=3)
         self.endpoint_pool = kwargs['endpoint_pool']
         opt_attributes = ['res_list', 'consumer_list']
         for opt_attribute in opt_attributes:
@@ -334,7 +334,7 @@ class Subset(object):
         """Deploy a VM on resources. Resource dependant. Must be reimplemented with a super call
         Should adapt the DomainEntity object as required before the subsetManager applies changes with connector
         """
-        available_oversubscribed = self.oversubscription.get_available()
+        available_oversubscribed = self.oversubscription.get_available(with_new_vm=True)
         if available_oversubscribed < self.get_vm_allocation(vm): 
             print('Warning: Not enough resources available to deploy', vm.get_name(), 'on res', self.get_res_name(), 'for request', self.get_vm_allocation(vm))
             return False

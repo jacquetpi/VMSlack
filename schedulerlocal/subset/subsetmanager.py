@@ -138,7 +138,6 @@ class SubsetManager(object):
             Return success status of operation
         """
         oversubscription = self.get_appropriate_id(vm)
-        # Even in oversubscribed env, vm should be on a pool having pRES => vRES to not be oversubscribed with itself
         subset = self.try_to_create_subset(initial_capacity=self.get_request(vm), oversubscription=oversubscription)
         if subset == None: return False
         self.collection.add_subset(oversubscription, subset)
@@ -295,7 +294,6 @@ class CpuSubsetManager(SubsetManager):
 
     def try_to_create_subset(self,  initial_capacity : int, oversubscription : float):
         """Try to create subset with specified capacity
-        TODO: Simplify
         ----------
 
         Parameters
@@ -750,7 +748,10 @@ class SubsetManagerPool(object):
         self.watch_out_of_schedulers_vm()
         for subset_manager in self.subset_managers.values():
             subset_manager.update_monitoring(timestamp=timestamp)
-        print(self)
+        # Print status to console if context changed
+        status_str = str(self)
+        if not hasattr(self, 'prev_status_str') or getattr(self, 'prev_status_str') != status_str: print(status_str)
+        setattr(self, 'prev_status_str', status_str)
 
     def deploy(self, vm : DomainEntity):
         """Deploy a VM on subset managers

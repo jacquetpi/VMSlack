@@ -57,24 +57,39 @@ class SubsetOversubscription(object):
         raise NotImplementedError()
 
 class SubsetOversubscriptionStatic(SubsetOversubscription):
+    """
+    A SubsetOversubscriptionStatic implements a static oversubscription mechanism (i.e. resource are oversubscribed by a fixed ratio)
+
+    Attributes
+    ----------
+    ratio : float
+        Static oversubscription ratio to apply
+    critical_size : int
+        VM will start being oversubscribed only after the number of VM reaches the critical_size attribute
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        req_attributes = ['ratio']
+        req_attributes = ['ratio', 'critical_size']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
 
-    def get_available(self):
+    def get_available(self, with_new_vm : bool = False):
         """Return the number of virtual resource available
         ----------
+
+        Parameters
+        ----------
+        with_new_vm : bool (opt)
+            If a new VM is to be considered while computing if critical size is reached
 
         Returns
         -------
         available : int
             count of available resources
         """
-        return (self.subset.get_capacity()*self.ratio) - self.subset.get_allocation()
+        return (self.subset.get_capacity()*self.__get_effective_ratio(with_new_vm)) - self.subset.get_allocation()
 
 
     def unused_resources_count(self):
@@ -87,14 +102,14 @@ class SubsetOversubscriptionStatic(SubsetOversubscription):
             count of unused resources
         """
         available_oversubscribed = self.get_available()
-        unused_cpu = floor(available_oversubscribed/self.ratio)
+        unused_cpu = floor(available_oversubscribed/self.__get_effective_ratio())
 
         used_cpu = self.subset.get_capacity() - unused_cpu
+
+        # Test specific case: our unused count floor should not reduce the capacity below the maximum configuration observed
+        # Avoid VM to be oversubscribed with themselves
         max_alloc = self.subset.get_max_consumer_allocation()
-        if used_cpu < max_alloc:
-             # Specific case: our unused count floor should not reduce the capacity below the maximum configuration observed
-             # Avoid VM to be oversubscribed with themselves
-            return max(0, floor(self.subset.get_capacity()-max_alloc))
+        if used_cpu < max_alloc: return max(0, floor(self.subset.get_capacity()-max_alloc))
     
         # Generic case
         return unused_cpu
@@ -118,13 +133,17 @@ class SubsetOversubscriptionStatic(SubsetOversubscription):
         request    = self.subset.get_vm_allocation(vm) # Without oversubscription
         capacity   = self.subset.get_capacity() # Without oversubscription
 
+        # Compute new resources needed based on oversubcription ratio
         available_oversubscribed = self.get_available()
+
         missing_oversubscribed   = (request - available_oversubscribed)
-        missing_physical = ceil(missing_oversubscribed/self.ratio) if missing_oversubscribed > 0 else 0
+        missing_physical = ceil(missing_oversubscribed/self.__get_effective_ratio(with_new_vm=True)) if missing_oversubscribed > 0 else 0
         new_capacity = capacity + missing_physical
 
-        if new_capacity < request: # otherwise, VM will be oversubscribed with itself
-            missing_physical+= ceil(request-new_capacity) 
+        # Check if new_capacity is enough to fullfil VM request without oversubscribing it with itself
+        # E.g. a 32vCPU request should be in a pool with 32 physical CPU, no matter what others VM are in it.
+        if new_capacity < request:
+            missing_physical+= ceil(request-new_capacity)
         return missing_physical
 
     def get_id(self):
@@ -136,6 +155,26 @@ class SubsetOversubscriptionStatic(SubsetOversubscription):
         id : str
            oversubscription id
         """
+        return self.ratio
+
+    def __get_effective_ratio(self, with_new_vm : bool = False):
+        """Get oversubscription ratio to apply based on if critical size was reached or not
+        ----------
+
+        Parameters
+        ----------
+        with_new_vm : bool (opt)
+            If a new VM is to be considered while computing if critical size is reached
+
+        Returns
+        -------
+        ratio : float
+           oversubscription
+        """
+        count = self.subset.count_consumer()
+        if with_new_vm: count+=1
+        if count < self.critical_size: # Check if oversubscription critical size is reached
+            return 1.0
         return self.ratio
 
     def __str__(self):
