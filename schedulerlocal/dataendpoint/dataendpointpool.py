@@ -93,8 +93,8 @@ class DataEndpointPool(object):
         """
         data = self.load_global_only(timestamp, subset_manager)
         if self.saver != None:
-            pass
-            #self.saver.store(DataEndpoint.record(data))
+            self.saver.store(DataEndpoint.record(tmp=timestamp, rec='global',\
+                res=subset_manager.get_res_name(), val=data, config=subset_manager.get_capacity()))
         return data
 
     def load_global_only(self, timestamp, subset_manager):

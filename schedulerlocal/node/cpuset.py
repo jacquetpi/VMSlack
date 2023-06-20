@@ -284,6 +284,17 @@ class ServerCpuSet(object):
         if not self.distances: raise ValueError('Distances weren\'t previously build')
         return self.distances
 
+    def get_allowed(self):
+        """Return usable CPU count for VMs
+        ----------
+
+        Returns
+        -------
+        count : CPU
+            Count of CPU
+        """
+        return len(self.get_cpu_list())
+
     def get_distance_between_cpus(self, cpu0 : ServerCpu, cpu1 : ServerCpu):
         """Retrieve the distance between two ServerCpu objects
         ----------

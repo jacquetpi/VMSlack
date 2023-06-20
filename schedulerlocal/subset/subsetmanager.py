@@ -269,6 +269,17 @@ class SubsetManager(object):
         """
         raise NotImplementedError()
 
+    def get_capacity(self):
+        """Get resource capacity managed by ManagerSubset. Resource dependant. Must be reimplemented
+        ----------
+
+        Return
+        ----------
+        capacity : float
+            capacity as float
+        """
+        raise NotImplementedError()
+
 class CpuSubsetManager(SubsetManager):
     """
     A CpuSubsetManager is an object in charge of determining appropriate CPU subset collection
@@ -510,6 +521,17 @@ class CpuSubsetManager(SubsetManager):
         """
         return 'cpu'
 
+    def get_capacity(self):
+        """Get CPU capacity managed by ManagerSubset
+        ----------
+
+        Return
+        ----------
+        capacity : float
+            capacity as float
+        """
+        return self.cpuset.get_allowed()
+
     def __str__(self):
         return 'CPUSubsetManager:\n' +  str(self.collection)
 
@@ -708,6 +730,17 @@ class MemSubsetManager(SubsetManager):
         """
         return 'mem'
 
+    def get_capacity(self):
+        """Get Memory capacity managed by ManagerSubset
+        ----------
+
+        Return
+        ----------
+        capacity : float
+            capacity as float
+        """
+        return self.memset.get_allowed()
+
     def __str__(self):
         return 'MemSubsetManager:\n' +  str(self.collection)
 
@@ -831,7 +864,7 @@ class SubsetManagerPool(object):
             if vm.is_being_destroyed(): continue
             if not self.has_vm(vm):
                 success_tuple = self.deploy(vm)
-                print('Warning: VM deployed out of scope of this scheduler detected ', vm.get_name(), ' was integred:', success_tuple)
+                print('Warning: VM deployed out of scope of this scheduler detected ', vm.get_name(), ' was integrated:', success_tuple)
 
     def has_vm(self, vm : DomainEntity):
         """Test if a VM is present in subsetManagers
@@ -875,7 +908,8 @@ class SubsetManagerPool(object):
             if vm != None: 
                 has_vm+=1
                 found = vm
-        if (has_vm != len(self.subset_managers)) and (has_vm == 0): raise ValueError('Invalid state encountered: VM unequally present in subsets ', vm.get_name(), has_vm)
+        if (has_vm != len(self.subset_managers)) and (has_vm == 0): 
+            raise ValueError('Invalid state encountered: VM unequally present in subsets', name, has_vm)
         return found
 
     def __str__(self):

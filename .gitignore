@@ -2,7 +2,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,venv,jupyternotebooks
 
 # Misc
-.subsettracker.py
+results/
 debug/topology_local.json
 debug/monitoring.csv
 
