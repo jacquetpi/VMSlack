@@ -35,7 +35,6 @@ if __name__ == '__main__':
                 json_topology = f.read()
             cpuset = ServerCpuSet().load_from_json(json_topology).build_distances()
             memset = ServerMemorySet().load_from_json(json_topology)
-            print('test', memset.get_allowed())
         elif current_argument in('-d', '--debug'):
             debug_level = int(current_value)
 
@@ -73,7 +72,7 @@ if __name__ == '__main__':
                                     memset=memset,\
                                     endpoint_pool=endpoint_pool,\
                                     connector=libvirt_connector,\
-                                    tick=0.25,\
+                                    tick=0.2,\
                                     api_url='127.0.0.1',
                                     api_port='8099',
                                     debug_level=debug_level)

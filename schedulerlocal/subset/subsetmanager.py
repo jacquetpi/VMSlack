@@ -657,7 +657,6 @@ class MemSubsetManager(SubsetManager):
         """
         for other_tuple in self.collection.get_res():
             if other_tuple == initial_tuple: continue
-            print(other_tuple, new_tuple)
             overlap = max(0, min(new_tuple[1], other_tuple[1]) - max(new_tuple[0], other_tuple[0]))
             if overlap>0: return False
         return True
@@ -837,7 +836,6 @@ class SubsetManagerPool(object):
         if name != None: vm = self.get_vm_by_name(name)
         if vm == None: return (False, 'does not exist')
         vm.set_being_destroyed(True)
-        print(vm.is_being_destroyed())
         treated = list()
         success = True
         # First, remove from subsets
