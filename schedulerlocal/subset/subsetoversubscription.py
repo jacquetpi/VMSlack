@@ -1,5 +1,6 @@
 from schedulerlocal.domain.domainentity import DomainEntity
 from math import ceil, floor
+import os
 
 class SubsetOversubscription(object):
     """
@@ -70,10 +71,11 @@ class SubsetOversubscriptionStatic(SubsetOversubscription):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        req_attributes = ['ratio', 'critical_size']
+        req_attributes = ['ratio']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
+        self.critical_size = int(os.getenv('OVSB_CRITICAL_SIZE'))
 
     def get_available(self, with_new_vm : bool = False):
         """Return the number of virtual resource available

@@ -845,8 +845,10 @@ class SubsetManagerPool(object):
                 break
             treated.append(subset_manager)
         if not success and treated: 
-            vm.set_being_destroyed(False)
             raise ValueError('Invalid state encountered')
+        if not success:
+            vm.set_being_destroyed(False)
+            return (False, 'unable to remove it from subsets')
         # second, remove from connector
         (success, reason) = self.connector.delete_vm(vm)
         if success:

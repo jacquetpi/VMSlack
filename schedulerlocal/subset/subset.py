@@ -33,7 +33,7 @@ class Subset(object):
         Count resources in subset
     """
     def __init__(self, **kwargs):
-        self.oversubscription = SubsetOversubscriptionStatic(subset=self, ratio=kwargs['oversubscription'], critical_size=3)
+        self.oversubscription = SubsetOversubscriptionStatic(subset=self, ratio=kwargs['oversubscription'])
         self.endpoint_pool = kwargs['endpoint_pool']
         opt_attributes = ['res_list', 'consumer_list']
         for opt_attribute in opt_attributes:

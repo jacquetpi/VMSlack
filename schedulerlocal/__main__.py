@@ -72,7 +72,7 @@ if __name__ == '__main__':
                                     memset=memset,\
                                     endpoint_pool=endpoint_pool,\
                                     connector=libvirt_connector,\
-                                    tick=0.2,\
+                                    delay=15,\
                                     api_url='127.0.0.1',
                                     api_port='8099',
                                     debug_level=debug_level)

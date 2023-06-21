@@ -9,6 +9,10 @@ QEMU_MACHINE="pc-q35-6.2"
 ##############
 TOPO_EXCLUDE = "" # as list of cpuid to exclude (e.g. 0,1 )
 ##############
+#  oversub   #
+##############
+OVSB_CRITICAL_SIZE=6 # oversub will not begin before this number of VM is reached
+##############
 #  influxdb  #
 ##############
 INFLUXDB_URL="http://localhost:8086"
