@@ -883,6 +883,9 @@ class SubsetManagerPool(object):
             if subset_manager.has_vm(vm): has_vm+=1
         if has_vm == len(self.subset_managers): return True
         if has_vm == 0: return False
+        if vm.is_being_destroyed():
+            print('Warning: vm', vm.get_name(), 'unequally present in subsets while being searched by object')
+            return False
         raise ValueError('Invalid state encountered: VM unequally present in subsets ', vm.get_name(), has_vm)
 
     def get_vm_by_name(self, name : str):
@@ -906,8 +909,12 @@ class SubsetManagerPool(object):
             if vm != None: 
                 has_vm+=1
                 found = vm
-        if (has_vm != len(self.subset_managers)) and (has_vm == 0): 
-            raise ValueError('Invalid state encountered: VM unequally present in subsets', name, has_vm)
+        if (has_vm != len(self.subset_managers)) and (has_vm != 0):
+            if vm.is_being_destroyed():
+                print('Warning: vm', vm.get_name(), 'unequally present in subsets while being searched by name')
+                return False
+            else:
+                raise ValueError('Invalid state encountered: VM unequally present in subsets', name, has_vm)
         return found
 
     def __str__(self):

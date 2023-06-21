@@ -157,7 +157,7 @@ class LibvirtConnector(object):
             host_config = len(vm.get_cpu_pin()[0])
             cputune_xml = xmlDomainCputune(xml_as_str=virDomain.XMLDesc(), host_config=host_config, cpupin_per_vcpu=vm.get_cpu_pin())
             virDomain = self.conn.defineXML(cputune_xml.convert_to_str_xml())
-        except libvirt.libvirtError as ex:
+        except Exception as ex:
             pass
 
     def build_cpu_pinning(self, cpu_list : list, host_config : int):

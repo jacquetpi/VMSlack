@@ -32,8 +32,8 @@ class ApiEndpoint(object):
         """
         def target():
             self.app = self.create_app()
-            print('Exposing API on http://' + self.api_url + ':' + str(self.api_port),  threads=1)
-            serve(self.app, host=self.api_url, port=self.api_port)
+            print('Exposing API on http://' + self.api_url + ':' + str(self.api_port))
+            serve(self.app, host=self.api_url, port=self.api_port,  threads=1)
 
         self.thread = threading.Thread(target=target)
         self.thread.start()
