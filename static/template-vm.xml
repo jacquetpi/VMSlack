@@ -7,7 +7,7 @@
   <currentMemory unit='KiB'>{mem}</currentMemory>
   <vcpu placement='static'>{cpu}</vcpu>
   <os>
-   <type arch='x86_64' machine='pc-q35-6.2'>hvm</type>
+   <type arch='x86_64' machine='{machine}'>hvm</type>
     <boot dev='hd'/>
     <!-- <boot dev='cdrom'/> -->
   </os>
@@ -26,7 +26,7 @@
     <suspend-to-disk enabled='yes'/>
   </pm>
   <devices>
-    <emulator>{qemu}</emulator>
+    <emulator>{loc}</emulator>
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2'/>
       <source file="{qcow2}"/>

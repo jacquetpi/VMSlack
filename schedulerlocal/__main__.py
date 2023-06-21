@@ -18,6 +18,7 @@ if __name__ == '__main__':
     short_options = "hd:t:"
     long_options = ["help", "debug=", "topology="]
 
+    load_dotenv()
     cpuset = None
     memset = None
     debug_level = 0
@@ -42,7 +43,8 @@ if __name__ == '__main__':
     # First, build node topology
     ###########################################
     if (cpuset is None) or (memset is None):
-        cpuset = CpuExplorer().build_cpuset()
+        to_exclude = [int(cpuid)for cpuid in os.getenv('TOPO_EXCLUDE').split(',')] if os.getenv('TOPO_EXCLUDE') else list()
+        cpuset = CpuExplorer(to_exclude=to_exclude).build_cpuset()
         memset = MemoryExplorer().build_memoryset()
         if debug_level>0:
             topology = {'cpuset': cpuset, 'memset': memset}
@@ -52,7 +54,9 @@ if __name__ == '__main__':
     ###########################################
     # Second, initiate local libvirt connection
     ###########################################
-    libvirt_connector = LibvirtConnector(url='qemu:///system')
+    libvirt_connector = LibvirtConnector(url=os.getenv('QEMU_URL'),\
+                                    loc=os.getenv('QEMU_LOC'),\
+                                    machine=os.getenv('QEMU_MACHINE'))
 
     ###########################################
     # Third, manage Endpoints

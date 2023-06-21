@@ -14,7 +14,7 @@ class LibvirtConnector(object):
 
     """
     def __init__(self, **kwargs):
-        req_attributes = ['url']
+        req_attributes = ['url', 'loc', 'machine']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -25,7 +25,6 @@ class LibvirtConnector(object):
         self.cache_entity = dict()
 
         with open('static/template-vm.xml', 'r') as f: self.template_vm = f.read()
-        self.qemu = '/usr/bin/qemu-system-x86_64'
 
     def get_vm_alive(self):
         """Retrieve list of VM being running currently as libvirt object
@@ -262,7 +261,8 @@ class LibvirtConnector(object):
                 replace('{mem}', str(vm.get_mem(as_kb=True))).\
                 replace('{oc_cpu}', str(vm.get_cpu_ratio())).\
                 replace('{oc_mem}', str(1.0)).\
-                replace('{qemu}', self.qemu).\
+                replace('{loc}', self.loc).\
+                replace('{machine}', self.machine).\
                 replace('{qcow2}', vm.get_qcow2())
         
         # Dynamically add cpupin related data to xml desc

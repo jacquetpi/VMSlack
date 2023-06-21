@@ -1,4 +1,14 @@
 ##############
+#  qemu      #
+##############
+QEMU_URL="qemu:///system"
+QEMU_LOC="/usr/bin/qemu-system-x86_64"
+QEMU_MACHINE="pc-q35-6.2"
+##############
+#  topology  #
+##############
+TOPO_EXCLUDE = "" # as list of cpuid to exclude (e.g. 0,1 )
+##############
 #  influxdb  #
 ##############
 INFLUXDB_URL="http://localhost:8086"

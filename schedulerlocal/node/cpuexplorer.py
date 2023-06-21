@@ -172,7 +172,7 @@ class CpuExplorer:
             ServerCpu object describing targeted CPU
         """
         conform_cpu_list_copy = list(set(conform_cpu_list))
-        if cpu in conform_cpu_list_copy: del conform_cpu_list_copy[cpu]
+        if cpu in conform_cpu_list_copy: conform_cpu_list_copy.remove(cpu)
 
         numa_node, sib_smt, sib_cpu = self.__read_cpu_topology(cpu, conform_cpu_list_copy)
         cache_level = self.__read_cpu_cache(cpu)
