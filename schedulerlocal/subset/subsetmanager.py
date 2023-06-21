@@ -866,7 +866,7 @@ class SubsetManagerPool(object):
                 success_tuple = self.deploy(vm)
                 print('Warning: VM deployed out of scope of this scheduler detected ', vm.get_name(), ' was integrated:', success_tuple)
 
-    def has_vm(self, vm : DomainEntity):
+    def has_vm(self, vm_copy : DomainEntity):
         """Test if a VM is present in subsetManagers
         ----------
 
@@ -882,13 +882,10 @@ class SubsetManagerPool(object):
         """
         has_vm           = 0
         for subset_manager in self.subset_managers.values():
-            if subset_manager.has_vm(vm): has_vm+=1
+            if subset_manager.has_vm(vm_copy): has_vm+=1
         if has_vm == len(self.subset_managers): return True
         if has_vm == 0: return False
-        if vm.is_being_destroyed():
-            print('Warning: vm', vm.get_name(), 'unequally present in subsets while being searched by object')
-            return False
-        raise ValueError('Invalid state encountered: VM unequally present in subsets ', vm.get_name(), has_vm)
+        raise ValueError('Invalid state encountered: VM unequally present in subsets ', vm_copy.get_name(), has_vm)
 
     def get_vm_by_name(self, name : str):
         """Get a vm by its name, none if not present
@@ -904,16 +901,18 @@ class SubsetManagerPool(object):
         vm : DomainEntity
             None if not present
         """
-        found = None
         has_vm = 0
+        being_destroyed = False
+        found = None
         for subset_manager in self.subset_managers.values():
             vm = subset_manager.get_vm_by_name(name)
             if vm != None: 
                 has_vm+=1
+                being_destroyed = being_destroyed or vm.is_being_destroyed()
                 found = vm
         if (has_vm != len(self.subset_managers)) and (has_vm != 0):
-            if vm.is_being_destroyed():
-                print('Warning: vm', vm.get_name(), 'unequally present in subsets while being searched by name')
+            if being_destroyed:
+                print('Warning: vm', vm.get_name(), 'unequally present in subsets while being destroyed')
                 return False
             else:
                 raise ValueError('Invalid state encountered: VM unequally present in subsets', name, has_vm)
