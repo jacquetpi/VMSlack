@@ -772,12 +772,12 @@ class SubsetManagerPool(object):
             'cpu': CpuSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, cpuset=self.cpuset, distance_max=50),\
             'mem': MemSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, memset=self.memset)
             }
+        self.watch_out_of_schedulers_vm() # Manage pre-installed VMs
 
     def iterate(self, timestamp : int):
         """Iteration
         ----------
         """
-        self.watch_out_of_schedulers_vm()
         for subset_manager in self.subset_managers.values():
             subset_manager.update_monitoring(timestamp=timestamp)
         # Print status to console if context changed

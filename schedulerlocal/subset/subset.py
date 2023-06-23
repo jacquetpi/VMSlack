@@ -420,8 +420,7 @@ class SubsetCollection(object):
         id : str
             The subset id to remove
         """
-        if id not in self.subset_dict: raise ValueError('Subset id does not exist')
-        del self.subset_dict[id]
+        if id in self.subset_dict: del self.subset_dict[id]
 
     def get_subset(self, id : float):
         """Get a subset from collection
