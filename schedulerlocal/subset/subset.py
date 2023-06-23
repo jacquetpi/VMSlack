@@ -99,18 +99,18 @@ class Subset(object):
         success : bool
             Return success status of operation
         """
-        warning_message = 'Warning: consumer found in subset' + self.get_res_name() + '-' + str(self.get_oversubscription_id) + 'while being destroyed'
+        warning_message = 'Warning: consumer found in subset ' + self.get_res_name() + '-' + str(self.get_oversubscription_id()) + 'while being destroyed:'
         for consumer in self.consumer_list:
             # Search by uuid if available
             if (consumer.get_uuid() == None) and (consumer.get_name() == vm.get_name()): 
                 if consumer.is_being_destroyed():
-                    print(warning_message)
+                    print(warning_message + ' ' + consumer.get_name() + ' ' + consumer.get_uuid())
                     return False
                 return True
             # Otherwise search by name
             elif (consumer.get_uuid() != None) and (consumer.get_uuid() == vm.get_uuid()):
                 if consumer.is_being_destroyed():
-                    print(warning_message)
+                    print(warning_message + ' ' + consumer.get_name() + ' ' + consumer.get_uuid())
                     return False
                 return True
         return False
