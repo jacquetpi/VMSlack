@@ -908,7 +908,7 @@ class SubsetManagerPool(object):
                 being_destroyed = being_destroyed or vm.is_being_destroyed()
                 found = vm
         if (has_vm != len(self.subset_managers)) and (has_vm != 0):
-            based_message = 'Warning: vm', vm.get_name(), 'unequally present in subsets'
+            based_message = 'Warning: vm' + name + 'unequally present in subsets'
             if not being_destroyed: print(based_message)
             else: print(based_message  + ' while being destroyed')
         return found
