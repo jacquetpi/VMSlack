@@ -176,6 +176,10 @@ class Subset(object):
         consumer : object
             The consumer to remove
         """
+        if consumer not in self.consumer_list:
+            if consumer == None: print('Warning: trying to remove a null consumer')
+            else: print('Warning: trying to remove a non present consumer', consumer.get_name())
+            return
         self.consumer_list.remove(consumer)
 
     def count_consumer(self):
