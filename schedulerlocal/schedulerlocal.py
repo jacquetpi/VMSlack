@@ -24,7 +24,7 @@ class SchedulerLocal:
         self.api_endpoint.run()
 
     def run(self):
-        """Run scheduler on specified tick value
+        """Run scheduler with specified delay
         ----------
         """
         launch_at = time.time_ns()

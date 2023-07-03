@@ -1,50 +1,17 @@
-import sys, getopt, os, libvirt, json
+import os, getopt, sys
 from dotenv import load_dotenv
+from schedulerglobal.schedulerglobal import SchedulerGlobal
 
-STATE_ENDPOINT = ""
-LIBVIRT_NODES = dict()
-
-def read_endpoint():
-    return 'todo'
-
-def display_status():
-    return 'todo'
-
-def deploy_vm_on_host(host: str, name : str, cpu : int, memory : int):
-    try:
-        conn = libvirt.open(LIBVIRT_NODES[host])
-        return ''
-    except libvirt.libvirtError as e:
-        print(repr(e), file=sys.stderr)
-        sys.exit(-1)
-        
-def deploy_vm(name : str, cpu : int, memory : int, ratio : float):
-    for hostname, host_status in status.items():
-        status = read_endpoint()
-        deploy_vm_on_host(hostname, name, cpu, memory)
-        return 'todo'
-
-    print("No host found")
+SCHEDULERLOCAL_LIST = ''
 
 def print_usage():
-    print("python3 name [--help] [--list=''] [--deploy=name,cpu,mem,ratio")
-
-def convert_args_to_values(self, request_as_str):
-    config = current_value.split(',')
-    try:
-        name = config[0]
-        cpu = int(config[1])
-        memory = int(config[2])
-        ratio = int(config[3])
-    except Exception:
-        print_usage()
-        sys.exit(-1)
-    return name, cpu, memory, ratio
+    print('python3 -m schedulerglobal name [--help] [--list=url1,url2]')
+    print("If no url list is specified, the environment variable SCHEDULERLOCAL_LIST will be used")
 
 if __name__ == '__main__':
 
-    short_options = "hld:"
-    long_options = ["help", "list","deploy="]
+    short_options = 'hl:'
+    long_options = ['help', 'list=']
  
     try:
         arguments, values = getopt.getopt(sys.argv[1:], short_options, long_options)
@@ -53,14 +20,19 @@ if __name__ == '__main__':
         sys.exit(2)
 
     load_dotenv()
-    STATE_ENDPOINT = os.getenv('STATE_ENDPOINT')
-    LIBVIRT_NODES = json.loads(os.getenv('LIBVIRT_NODES'))
+    SCHEDULERLOCAL_LIST = os.getenv('SCHEDULERLOCAL_LIST')
 
     for current_argument, current_value in arguments:
         if current_argument in ("-l", "--list"):
-            display_status()
-        elif current_argument in ("-d", "--deploy"):
-            name, cpu, memory, ratio = convert_args_to_values(current_value)
-            deploy_vm(name, cpu, memory, ratio)
+            SCHEDULERLOCAL_LIST = current_value
+        elif current_argument in ("-h", "--help"):
+            print_usage()
+            sys.exit(0)
         else:
             print_usage()
+            sys.exit(-1)
+    
+    global_scheduler = SchedulerGlobal(url_list=SCHEDULERLOCAL_LIST.split(','),\
+            api_url='127.0.0.1', api_port='8100',\
+            delay=15)
+    global_scheduler.run()
