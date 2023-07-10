@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 def print_usage():
     print('python3 -m schedulerclient name [--help] [--deploy=name,cpu,mem,ratio,disk] [--remove=name] [--url=url] [--status]')
-    print('If no url is specified, the environment variable SCHEDULERGLOBAL_URL will be used')
+    print('If no url is specified, the environment variable SCG_URL and SCG_PORT will be used')
 
 def retrieve_deploy_args(self, request_as_str):
     config = current_value.split(',')
@@ -31,7 +31,7 @@ if __name__ == '__main__':
         sys.exit(2)
 
     load_dotenv()
-    SCHEDULERGLOBAL_URL = os.getenv('SCHEDULERGLOBAL_URL')
+    SCHEDULERGLOBAL_URL = 'http://' + os.getenv('SCG_URL') + ':' + os.getenv('SCG_PORT')
 
     deployment = False
     removal = False
@@ -43,7 +43,7 @@ if __name__ == '__main__':
         elif current_argument in ('-d', '--deploy'):
             name, cpu, memory, ratio, disk = retrieve_deploy_args(current_value)
             deployment, removal = (True, False)
-        elif current_argument in ('-r', '--removal'):
+        elif current_argument in ('-r', '--remove'):
             name = current_value
             deployment, removal = (False, True)
         elif current_argument in ('u', '--url'):

@@ -32,7 +32,7 @@ class ApiEndpoint(object):
         """
         def target():
             self.app = self.create_app()
-            print('Exposing API on http://' + self.api_url + ':' + str(self.api_port))
+            print('Exposing schedulerglobal API on http://' + self.api_url + ':' + str(self.api_port))
             serve(self.app, host=self.api_url, port=self.api_port,  threads=1)
 
         self.thread = threading.Thread(target=target)
@@ -45,7 +45,7 @@ class ApiEndpoint(object):
         app = Flask('myapp')
 
         app.route('/', endpoint='home', methods = ['GET'])(lambda: self.home())
-        app.route('/info', endpoint='info', methods = ['GET'])(lambda: self.info())
+        app.route('/status', endpoint='status', methods = ['GET'])(lambda: self.status())
         app.route('/deploy', endpoint='deploy', methods = ['GET'])(lambda: self.deploy())
         app.route('/remove', endpoint='remove', methods = ['GET'])(lambda: self.remove())
 
@@ -57,11 +57,11 @@ class ApiEndpoint(object):
         """
         return 'SchedulerGlobal is working and waiting for instructions'
 
-    def info(self):
+    def status(self):
         """/info uri : displaying status 
         ----------
         """
-        return str(self.scheduler_global.info()).replace('\n', '<br>')
+        return self.scheduler_global.status()
 
     def deploy(self):
         """/deploy uri : deploying a new VM
@@ -86,8 +86,7 @@ class ApiEndpoint(object):
         args_required = ['name']
         for arg in args_required:
             if request.args.get(arg) is None: return usage
-
-        return  self.scheduler_global.remove(name=request.args.get('name'))
+        return self.scheduler_global.remove(name=request.args.get('name'))
 
     def shutdown(self):
         """Manage thread shutdown

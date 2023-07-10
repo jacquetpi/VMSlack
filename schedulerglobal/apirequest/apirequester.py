@@ -51,10 +51,10 @@ class ApiRequester(object):
         response : str
             Return result of operation as str
         """
-        constructed_url = self.host_url + '/deploy?name=' + name + '&cpu=' + cpu + '&memory=' + memory +\
+        constructed_url = host_url + '/deploy?name=' + name + '&cpu=' + cpu + '&memory=' + memory +\
              '&oc=' + ratio + '&qcow2=' + disk
-        response = requests.post(constructed_url)
-        return response
+        response = requests.get(constructed_url)
+        return response.json()
 
     def remove_from(self,  host_url : str, name : str):
         """Remove VM from specified node
@@ -73,10 +73,10 @@ class ApiRequester(object):
             Return result of operation as str
         """
         constructed_url = host_url + '/remove?name=' + name
-        response = requests.post(constructed_url)
-        return response
+        response = requests.get(constructed_url)
+        return response.json()
 
-    def info_of(self, host_url : str):
+    def status_of(self, host_url : str):
         """Return the state of requested host
         ----------
 
@@ -90,6 +90,6 @@ class ApiRequester(object):
         state : str
             Cluster related info as str
         """
-        constructed_url = host_url + '/info'
-        response = requests.post(constructed_url)
-        return response
+        constructed_url = host_url + '/status'
+        response = requests.get(constructed_url)
+        return response.json()

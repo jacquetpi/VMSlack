@@ -115,10 +115,10 @@ class SubsetManager(object):
         # Check if subset has available space
         additional_res_required = targeted_subset.get_additional_res_count_required_for_vm(vm)
         if additional_res_required <= 0:
-            # No missing space, can deploy the VM right away
+            # No missing resources, can deploy the VM right away
             return targeted_subset.deploy(vm)
         else:
-            # Missing space on subset, try to allocate more
+            # Missing resources on subset, try to allocate more
             extended = self.try_to_extend_subset(targeted_subset, additional_res_required)
             if not extended: return False 
             return targeted_subset.deploy(vm) 
@@ -258,6 +258,22 @@ class SubsetManager(object):
         clean_needed_list = self.collection.update_monitoring(timestamp=timestamp)
         for subset in clean_needed_list: self.shrink_subset(subset)
 
+    def status(self):
+        """Return susbset status as dict
+        ----------
+
+        Returns
+        -------
+        status : dicts
+            Subset status
+        """
+        status = dict()
+        available = self.get_available_res_count()
+        for name, subset in self.collection.get_dict().items():
+            status[name] = subset.status()
+            status[name]['vpotential'] = subset.get_oversubscription().get_oversubscribed_quantity(quantity=available, with_new_vm=True)
+        return status
+
     def get_res_name(self):
         """Get resource name managed by ManagerSubset. Resource dependant. Must be reimplemented
         ----------
@@ -277,6 +293,17 @@ class SubsetManager(object):
         ----------
         capacity : float
             capacity as float
+        """
+        raise NotImplementedError()
+
+    def get_available_res_count(self):
+        """Get available resources count on ManagerSubset. Resource dependant. Must be reimplemented
+        ----------
+
+        Return
+        ----------
+        count : int
+            resource count
         """
         raise NotImplementedError()
 
@@ -532,6 +559,17 @@ class CpuSubsetManager(SubsetManager):
         """
         return self.cpuset.get_allowed()
 
+    def get_available_res_count(self):
+        """Get available CPU count on CpuSubsetManager
+        ----------
+
+        Return
+        ----------
+        count : int
+            available cpu count
+        """
+        return len(self.__get_available_cpus())
+
     def __str__(self):
         return 'CPUSubsetManager:\n' +  str(self.collection)
 
@@ -740,6 +778,21 @@ class MemSubsetManager(SubsetManager):
         """
         return self.memset.get_allowed()
 
+    def get_available_res_count(self):
+        """Get available memory quantity on MemSubsetManager
+        ----------
+
+        Return
+        ----------
+        memory : int
+            Memory as MB
+        """
+        allocation = 0
+        for subset_tuple in self.collection.get_res():
+            bound_inf, bound_sup = subset_tuple
+            if bound_sup>bound_inf: allocation+= bound_sup - bound_inf
+        return self.get_capacity() - allocation
+
     def __str__(self):
         return 'MemSubsetManager:\n' +  str(self.collection)
 
@@ -912,6 +965,21 @@ class SubsetManagerPool(object):
             if not being_destroyed: print(based_message)
             else: print(based_message  + ' while being destroyed')
         return found
+
+    def status(self):
+        """Return susbsets status as dict
+        ----------
+
+        Returns
+        -------
+        status : dicts
+            Subset status
+        """
+        status = dict()
+        for name, manager in self.subset_managers.items():
+            status[name] =  manager.status()
+        return status
+
 
     def __str__(self):
         return ''.join([str(subset_manager) + '\n' for subset_manager in self.subset_managers.values()])

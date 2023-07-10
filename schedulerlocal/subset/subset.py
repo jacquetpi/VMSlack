@@ -302,6 +302,16 @@ class Subset(object):
         """
         return self.endpoint_pool.load_subset(subset=self) # TODO
 
+    def get_oversubscription(self):
+        """Getter on oversubscription computation
+
+        Returns
+        -------
+        computation : SubsetOversubscription
+            subset oversubscription computation
+        """
+        return self.oversubscription
+
     def get_current_resources_usage(self):
         """Get current usage of physical resources. Resource dependant. Must be reimplemented
 
@@ -355,20 +365,31 @@ class Subset(object):
         self.add_consumer(vm)
         return True
 
+    def status(self):
+        """Build and return a dict representating current allocation and available oversubscribed quantities
+        ----------
+
+        Returns
+        ----------
+        status : dict
+            Subset status as dict
+        """
+        return {'pcap': self.get_capacity(), 'palloc': self.get_allocation(), 'vavail': self.oversubscription.get_available(with_new_vm=True)}
+
     def update_monitoring(self, timestamp : int):
         """Order a monitoring session on current subset with specified timestamp key
         Use endpoint_pool to load and store from the appropriate location
         ----------
 
-        Returns
-        -------
-        clean_needed : bool
-            If VM left under the scope of the scheduler (without passing by manager), return True
-
         Parameters
         ----------
         timestamp : int
             The timestamp key
+    
+        Returns
+        -------
+        clean_needed : bool
+            If VM left under the scope of the scheduler (without passing by manager), return True
         """
         current_usage, current_vm_usage = self.endpoint_pool.load_subset(timestamp=timestamp, subset=self)
         clean_needed = False
@@ -443,6 +464,12 @@ class SubsetCollection(object):
         ----------
         """
         return self.subset_dict.values()
+
+    def get_dict(self):
+        """Get subsets as dict
+        ----------
+        """
+        return self.subset_dict
 
     def contains_subset(self, id : float):
         """Check if specified subset id exists

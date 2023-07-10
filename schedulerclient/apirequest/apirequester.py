@@ -50,8 +50,8 @@ class ApiRequester(object):
         """
         constructed_url = self.url + '/deploy?name=' + name + '&cpu=' + cpu + '&memory=' + memory +\
              '&oc=' + ratio + '&qcow2=' + disk
-        response = requests.post(constructed_url)
-        return response
+        response = requests.get(constructed_url)
+        return response.json()
 
     def remove(self, name : str):
         """Ask the Global scheduler to remove a specific VM
@@ -68,10 +68,12 @@ class ApiRequester(object):
             Return result of operation as str
         """
         constructed_url = self.url + '/remove?name=' + name
-        response = requests.post(constructed_url)
-        return response
+        print(constructed_url)
+        response = requests.get(constructed_url)
+        print(response)
+        return response.json()
 
-    def info(self):
+    def status(self):
         """Return the current cluster state
         ----------
 
@@ -80,6 +82,6 @@ class ApiRequester(object):
         state : str
             Cluster related info as str
         """
-        constructed_url = self.url + '/info'
-        response = requests.post(constructed_url)
-        return response
+        constructed_url = self.url + '/status'
+        response = requests.get(constructed_url)
+        return response.json()

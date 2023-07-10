@@ -1,5 +1,6 @@
 import time
 from schedulerglobal.apirequest.apirequester import ApiRequester
+from schedulerglobal.apiendpoint.apiendpoint import ApiEndpoint
 
 class SchedulerGlobal(object):
     """
@@ -19,13 +20,16 @@ class SchedulerGlobal(object):
         Run the global scheduler
     """
     def __init__(self, **kwargs):
-        req_attributes = ['url_list', 'delay']
+        req_attributes = ['api_url', 'api_port', 'url_list', 'delay']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
         
-        self.requester = ApiRequester(api_url=kwargs['api_url'], api_port=kwargs['api_port'], scheduler_global=self)
+        self.endpoint = ApiEndpoint(api_url=self.api_url, api_port=self.api_port, scheduler_global=self)
+        self.endpoint.run()
+        self.requester = ApiRequester()
         self.known_vm = dict()
+
     def run(self):
         """Run scheduler with specified delay
         ----------
@@ -74,8 +78,8 @@ class SchedulerGlobal(object):
         # Update list of known VM
         return 'TODO'
 
-    def remove(self, name : str, cpu : str, memory : str, ratio : str, disk : str):
-        """Deploy a VM to the cluster
+    def remove(self, name : str):
+        """Remove a VM from the cluster
         ----------
 
         Parameters
@@ -92,7 +96,7 @@ class SchedulerGlobal(object):
             return 'Unknown VM'
         return self.requester.remove(host_url=self.known_vm[name], name=name)
 
-    def info(self):
+    def status(self):
         """Return the current cluster state
         ----------
 
@@ -101,9 +105,10 @@ class SchedulerGlobal(object):
         state : str
             Cluster related info as str
         """
+        global_status = dict()
         for node_url in self.url_list:
             try:
-                self.requester.info(host_url=node_url)
+                global_status[node_url] = self.requester.status_of(host_url=node_url)
             except Exception as e:
                 print('Info: Error with url', node_url, str(e))
-        return 'TODO'
+        return global_status

@@ -91,8 +91,25 @@ class SubsetOversubscriptionStatic(SubsetOversubscription):
         available : int
             count of available resources
         """
-        return (self.subset.get_capacity()*self.__get_effective_ratio(with_new_vm)) - self.subset.get_allocation()
+        return self.get_oversubscribed_quantity(quantity=self.subset.get_capacity(), with_new_vm=with_new_vm) - self.subset.get_allocation()
 
+    def get_oversubscribed_quantity(self, quantity : int, with_new_vm : bool = False):
+        """Based on a specific quantity, return oversubscribed equivalent
+        ----------
+
+        Parameters
+        ----------
+        quantity : int
+            Quantity to be oversubscribed
+        with_new_vm : bool (opt)
+            If a new VM is to be considered while computing if critical size is reached
+
+        Returns
+        -------
+        quantity : int
+            Quantity oversubscribed
+        """
+        return quantity*self.__get_effective_ratio(with_new_vm)
 
     def unused_resources_count(self):
         """Return attributed physical resources which are unused

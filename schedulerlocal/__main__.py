@@ -19,6 +19,10 @@ if __name__ == '__main__':
     long_options = ["help", "debug=", "topology="]
 
     load_dotenv()
+    SCL_URL   = os.getenv('SCL_URL')
+    SCL_PORT  = int(os.getenv('SCL_PORT'))
+    SCL_DELAY = int(os.getenv('SCL_DELAY'))
+
     cpuset = None
     memset = None
     debug_level = 0
@@ -72,9 +76,9 @@ if __name__ == '__main__':
                                     memset=memset,\
                                     endpoint_pool=endpoint_pool,\
                                     connector=libvirt_connector,\
-                                    delay=15,\
-                                    api_url='127.0.0.1',
-                                    api_port='8099',
+                                    delay=SCL_DELAY,\
+                                    api_url=SCL_URL,\
+                                    api_port=SCL_PORT,\
                                     debug_level=debug_level)
     try:
         scheduler_local.run()

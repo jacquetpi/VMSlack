@@ -1,4 +1,4 @@
-import threading, os, json
+import threading, os
 from flask import Flask
 from flask import request
 from waitress import serve
@@ -32,7 +32,7 @@ class ApiEndpoint(object):
         """
         def target():
             self.app = self.create_app()
-            print('Exposing API on http://' + self.api_url + ':' + str(self.api_port))
+            print('Exposing schedulerlocal API on http://' + self.api_url + ':' + str(self.api_port))
             serve(self.app, host=self.api_url, port=self.api_port,  threads=1)
 
         self.thread = threading.Thread(target=target)
@@ -45,7 +45,7 @@ class ApiEndpoint(object):
         app = Flask('myapp')
 
         app.route('/', endpoint='home', methods = ['GET'])(lambda: self.home())
-        app.route('/info', endpoint='info', methods = ['GET'])(lambda: self.info())
+        app.route('/status', endpoint='status', methods = ['GET'])(lambda: self.status())
         app.route('/deploy', endpoint='deploy', methods = ['GET'])(lambda: self.deploy())
         app.route('/remove', endpoint='remove', methods = ['GET'])(lambda: self.remove())
 
@@ -57,11 +57,11 @@ class ApiEndpoint(object):
         """
         return 'Scheduler is working and waiting for instructions'
 
-    def info(self):
+    def status(self):
         """/info uri : displaying status 
         ----------
         """
-        return str(self.subset_manager_pool).replace('\n', '<br>')
+        return self.subset_manager_pool.status()
 
     def deploy(self):
         """/deploy uri : deploying a new VM
@@ -80,23 +80,20 @@ class ApiEndpoint(object):
         vm_to_create = DomainEntity(name=name, cpu=cpu, mem=mem, cpu_ratio=oc, qcow2=qcow2)
         success, reason = self.subset_manager_pool.deploy(vm_to_create)
 
-        answer  = {'success':success, 'reason':reason}
-        return  json.dumps(answer)
+        return {'success':success, 'reason':reason}
 
     def remove(self):
         """/remove uri : Remove a VM identified by its name
         ----------
         """
         usage = 'Wrong usage: http://' + self.api_url + ':' + str(self.api_port) + '/remove?name=example'
-
         args_required = ['name']
         for arg in args_required:
             if request.args.get(arg) is None: return usage
         name = request.args.get('name')
         success, reason = self.subset_manager_pool.remove(name=name)
         
-        answer  = {'success':success, 'reason':reason}
-        return  json.dumps(answer)
+        return {'success':success, 'reason':reason}
 
     def shutdown(self):
         """Manage thread shutdown
