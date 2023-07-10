@@ -46,6 +46,7 @@ class ApiEndpoint(object):
 
         app.route('/', endpoint='home', methods = ['GET'])(lambda: self.home())
         app.route('/status', endpoint='status', methods = ['GET'])(lambda: self.status())
+        app.route('/listvm', endpoint='listvm', methods = ['GET'])(lambda: self.listvm())
         app.route('/deploy', endpoint='deploy', methods = ['GET'])(lambda: self.deploy())
         app.route('/remove', endpoint='remove', methods = ['GET'])(lambda: self.remove())
 
@@ -63,6 +64,12 @@ class ApiEndpoint(object):
         """
         return self.subset_manager_pool.status()
 
+    def listvm(self):
+        """/listvm uri : displaying list of hosted VM 
+        ----------
+        """
+        return self.subset_manager_pool.list_vm()
+
     def deploy(self):
         """/deploy uri : deploying a new VM
         ----------
@@ -77,9 +84,9 @@ class ApiEndpoint(object):
         mem  = int(float(request.args.get('mem'))*(1024**2)) # from GB to KB
         oc   = float(request.args.get('oc'))
         qcow2 = str(request.args.get('qcow2'))
+
         vm_to_create = DomainEntity(name=name, cpu=cpu, mem=mem, cpu_ratio=oc, qcow2=qcow2)
         success, reason = self.subset_manager_pool.deploy(vm_to_create)
-
         return {'success':success, 'reason':reason}
 
     def remove(self):

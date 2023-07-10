@@ -6,14 +6,14 @@ def print_usage():
     print('python3 -m schedulerclient name [--help] [--deploy=name,cpu,mem,ratio,disk] [--remove=name] [--url=url] [--status]')
     print('If no url is specified, the environment variable SCG_URL and SCG_PORT will be used')
 
-def retrieve_deploy_args(self, request_as_str):
+def retrieve_deploy_args(request_as_str : str):
     config = current_value.split(',')
     try:
         name = config[0]
         cpu = int(config[1])
         memory = int(config[2])
         ratio = int(config[3])
-        disk = int(config[4])
+        disk = config[4]
     except Exception:
         print_usage()
         sys.exit(-1)

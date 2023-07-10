@@ -576,6 +576,19 @@ class SubsetCollection(object):
             if(subset.update_monitoring(timestamp=timestamp)): clean_needed_list.append(subset)
         return clean_needed_list
 
+    def get_consumers(self):
+        """Get List of hosted VMs
+        ----------
+
+        Return
+        ----------
+        vm : list
+            List of hosted vm
+        """
+        consumers = list()
+        for subset in self.subset_dict.values(): consumers.extend([vm.get_name() for vm in subset.get_consumers()])
+        return consumers
+
     def __str__(self):
         return ''.join(['|_>' + str(v) + '\n' for v in self.subset_dict.values()])
 

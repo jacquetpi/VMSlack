@@ -1,4 +1,4 @@
-import requests, json
+import requests
 
 class ApiRequester(object):
     """
@@ -48,9 +48,10 @@ class ApiRequester(object):
         response : str
             Return result of operation as str
         """
-        constructed_url = self.url + '/deploy?name=' + name + '&cpu=' + cpu + '&memory=' + memory +\
-             '&oc=' + ratio + '&qcow2=' + disk
+        constructed_url = self.url + '/deploy?name=' + str(name) + '&cpu=' + str(cpu) + '&mem=' + str(memory) +\
+             '&oc=' + str(ratio) + '&qcow2=' + str(disk)
         response = requests.get(constructed_url)
+        print(constructed_url)
         return response.json()
 
     def remove(self, name : str):
@@ -67,10 +68,8 @@ class ApiRequester(object):
         response : str
             Return result of operation as str
         """
-        constructed_url = self.url + '/remove?name=' + name
-        print(constructed_url)
+        constructed_url = self.url + '/remove?name=' + str(name)
         response = requests.get(constructed_url)
-        print(response)
         return response.json()
 
     def status(self):

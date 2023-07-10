@@ -267,11 +267,11 @@ class SubsetManager(object):
         status : dicts
             Subset status
         """
-        status = dict()
         available = self.get_available_res_count()
+        status = {'avail': available, 'subset': dict()}
         for name, subset in self.collection.get_dict().items():
-            status[name] = subset.status()
-            status[name]['vpotential'] = subset.get_oversubscription().get_oversubscribed_quantity(quantity=available, with_new_vm=True)
+            status['subset'][name] = subset.status()
+            status['subset'][name]['vpotential'] = subset.get_oversubscription().get_oversubscribed_quantity(quantity=available, with_new_vm=True)
         return status
 
     def get_res_name(self):
@@ -306,6 +306,17 @@ class SubsetManager(object):
             resource count
         """
         raise NotImplementedError()
+
+    def get_consumers(self):
+        """Get List of hosted VMs
+        ----------
+
+        Return
+        ----------
+        vm : list
+            List of hosted vm
+        """
+        return self.collection.get_consumers()
 
 class CpuSubsetManager(SubsetManager):
     """
@@ -980,6 +991,16 @@ class SubsetManagerPool(object):
             status[name] =  manager.status()
         return status
 
+    def list_vm(self):
+        """Return list of hosted VM
+        ----------
+
+        Returns
+        -------
+        vm_list : list
+            List of hosted vm
+        """
+        return self.subset_managers['cpu'].get_consumers()
 
     def __str__(self):
         return ''.join([str(subset_manager) + '\n' for subset_manager in self.subset_managers.values()])

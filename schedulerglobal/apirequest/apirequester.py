@@ -51,10 +51,14 @@ class ApiRequester(object):
         response : str
             Return result of operation as str
         """
-        constructed_url = host_url + '/deploy?name=' + name + '&cpu=' + cpu + '&memory=' + memory +\
-             '&oc=' + ratio + '&qcow2=' + disk
-        response = requests.get(constructed_url)
-        return response.json()
+        constructed_url = host_url + '/deploy?name=' + str(name) + '&cpu=' + str(cpu) + '&mem=' + str(memory) +\
+             '&oc=' + str(ratio) + '&qcow2=' + str(disk)
+        try:
+            response = requests.get(constructed_url)
+            return response.json()
+        except Exception as e:
+            print('SCG Warning: Error with url', constructed_url, str(e))
+            return {'success':False, 'reason': str(e)}
 
     def remove_from(self,  host_url : str, name : str):
         """Remove VM from specified node
@@ -73,9 +77,13 @@ class ApiRequester(object):
             Return result of operation as str
         """
         constructed_url = host_url + '/remove?name=' + name
-        response = requests.get(constructed_url)
-        return response.json()
-
+        try:
+            response = requests.get(constructed_url)
+            return response.json()
+        except Exception as e:
+            print('SCG Warning: Error with url', constructed_url, str(e))
+            return {'success':False, 'reason': str(e)}
+        
     def status_of(self, host_url : str):
         """Return the state of requested host
         ----------
@@ -91,5 +99,31 @@ class ApiRequester(object):
             Cluster related info as str
         """
         constructed_url = host_url + '/status'
-        response = requests.get(constructed_url)
-        return response.json()
+        try:
+            response = requests.get(constructed_url)
+            return response.json()
+        except Exception as e:
+            print('SCG Warning: Error with url', constructed_url, str(e))
+            return None
+
+    def list_from(self,  host_url : str):
+        """Retrieve list of hosted VM from specified node
+        ----------
+
+        Parameters
+        ----------
+        host_url : str
+            Host targeted
+
+        Returns
+        -------
+        vm : list
+            List of VM if succeeded
+        """
+        constructed_url = host_url + '/listvm'
+        try:
+            response = requests.get(constructed_url)
+            return response.json()
+        except Exception as e:
+            print('SCG Warning: Error with url', constructed_url, str(e))
+            return list()

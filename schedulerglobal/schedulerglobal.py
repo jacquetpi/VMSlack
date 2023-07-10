@@ -49,7 +49,10 @@ class SchedulerGlobal(object):
         ----------
 
         """
-        pass  # Update monitoring?
+        # Resync VM list
+        for node in self.url_list:
+            for vm in self.requester.list_from(host_url=node):
+                if vm not in self.known_vm: self.known_vm[vm] = node
         
     def deploy(self, name : str, cpu : str, memory : str, ratio : str, disk : str):
         """Deploy a VM to the cluster
@@ -74,9 +77,43 @@ class SchedulerGlobal(object):
             Return result of operation as str
         """
         # Select the most appropriate cluster
-        # Deploy 
+        nodes_status = self.status()
+        chosen_node = None
+        for node, resources in nodes_status.items():
+           
+            cpu_match, mem_match = False, False
+
+            #-- CPU check --
+            # Check if matching cpu subset exists
+            oversub_key = str(float(ratio))
+            if (oversub_key in resources['cpu']['subset']) and \
+                (float(resources['cpu']['subset'][oversub_key]['vavail']) + float(resources['cpu']['subset'][oversub_key]['vpotential']) >= float(cpu)):
+                cpu_match = True
+            # Else check space for subset creation
+            elif(float(resources['cpu']['avail']) >= float(cpu)): cpu_match = True
+
+            #-- Mem check --
+            # Check if matching mem subset exists
+            oversub_key = '1' # No mem oversubscription in this paper
+            if (oversub_key in resources['mem']['subset']) and \
+                (float(resources['mem']['subset'][oversub_key]['vavail']) + float(resources['mem']['subset'][oversub_key]['vpotential']) >= (float(memory)*1024)):
+                mem_match = True
+            # Else check space for subset creation
+            elif(float(resources['mem']['avail']) >= (float(memory)*1024)): mem_match = True
+
+            if cpu_match and mem_match:
+                chosen_node = node
+                break
+
+        if chosen_node == None:
+            return {'success': False, 'reason':'No appropriate node found'}
+            
+        # Deploy
+        result = self.requester.deploy_on(host_url=chosen_node,name=name, cpu=cpu, memory=memory, ratio=ratio, disk=disk)
         # Update list of known VM
-        return 'TODO'
+        if 'success' in result and result['success']:
+            self.known_vm[name] = node
+        return result
 
     def remove(self, name : str):
         """Remove a VM from the cluster
@@ -93,8 +130,10 @@ class SchedulerGlobal(object):
             Return result of operation as str
         """
         if name not in self.known_vm:
-            return 'Unknown VM'
-        return self.requester.remove(host_url=self.known_vm[name], name=name)
+            return {'success': False, 'reason':'Unregistered VM'}
+        result = self.requester.remove_from(host_url=self.known_vm[name], name=name)
+        if 'success' in result and result['success']: self.known_vm.pop(name, None)
+        return result
 
     def status(self):
         """Return the current cluster state
@@ -107,8 +146,6 @@ class SchedulerGlobal(object):
         """
         global_status = dict()
         for node_url in self.url_list:
-            try:
-                global_status[node_url] = self.requester.status_of(host_url=node_url)
-            except Exception as e:
-                print('Info: Error with url', node_url, str(e))
+            val = self.requester.status_of(host_url=node_url)
+            if val != None: global_status[node_url] = val
         return global_status

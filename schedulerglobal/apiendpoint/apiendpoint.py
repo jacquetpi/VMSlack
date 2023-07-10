@@ -73,8 +73,8 @@ class ApiEndpoint(object):
         for arg in args_required:
             if request.args.get(arg) is None: return usage
 
-        return  self.scheduler_global.deploy(name=request.args.get('name'),\
-            cpu=request.args.get('cpu'), mem=request.args.get('mem'),\
+        return self.scheduler_global.deploy(name=request.args.get('name'),\
+            cpu=request.args.get('cpu'), memory=request.args.get('mem'),\
             ratio=request.args.get('oc'), disk=request.args.get('qcow2'))
 
     def remove(self):
@@ -86,6 +86,7 @@ class ApiEndpoint(object):
         args_required = ['name']
         for arg in args_required:
             if request.args.get(arg) is None: return usage
+            
         return self.scheduler_global.remove(name=request.args.get('name'))
 
     def shutdown(self):
