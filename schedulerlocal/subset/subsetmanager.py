@@ -650,10 +650,13 @@ class MemSubsetManager(SubsetManager):
         success : bool
             Return success status of operation
         """
-        initial_tuple = subset.get_res()[0]
-        
-        bound_inf, bound_sup = initial_tuple
-        new_tuple = (bound_inf, bound_sup+amount)
+        if subset.get_res():
+            initial_tuple = subset.get_res()[0]
+            bound_inf, bound_sup = initial_tuple
+            new_tuple = (bound_inf, bound_sup+amount)
+        else:
+            initial_tuple = None
+            new_tuple = (0, amount)
         
         success = self.__check_capacity_bound(bounds=new_tuple) 
         if not success: return False
@@ -698,7 +701,7 @@ class MemSubsetManager(SubsetManager):
         Returns
         -------
         res : boolean
-            True if overlap, false otherwise.
+            False if overlap check failed, True if succeeded.
         """
         for other_tuple in self.collection.get_res():
             if other_tuple == initial_tuple: continue
