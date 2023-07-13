@@ -78,7 +78,7 @@ class CpuExplorer:
             split = line.split(' ')
             if not split[self.fs_stats_keys['cpuid']].startswith('cpu'): break
             if split[self.fs_stats_keys['cpuid']] not in hist_by_cpu.keys(): continue
-
+            
             hist_object = hist_by_cpu[split[self.fs_stats_keys['cpuid']]]
             cpu_usage = self.__get_usage_of_line(split=split, hist_object=hist_object)
         

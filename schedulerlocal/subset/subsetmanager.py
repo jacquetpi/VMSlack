@@ -227,10 +227,7 @@ class SubsetManager(object):
         subset : Subset
             The subset to shrink
         """
-        # Must be reimplemented
-        if (subset.count_res() == 0) and (subset.count_consumer() ==0):
-            self.collection.remove_subset(subset.get_oversubscription_id())
-            del subset
+        raise NotImplementedError()
 
     def get_current_resources_usage(self):
         """Get current usage of physical resources. Resource dependant. Must be reimplemented
@@ -504,7 +501,6 @@ class CpuSubsetManager(SubsetManager):
         last_index = len(res_list) - 1
         for count in range(unused): subset.remove_res(res_list[last_index-count])
         subset.sync_pinning()
-        super().shrink_subset(subset)
 
     def get_appropriate_id(self, vm : DomainEntity):
         """For a given VM, get its appropriate subset ID (corresponds to its premium policy)
@@ -723,7 +719,6 @@ class MemSubsetManager(SubsetManager):
         initial_tuple = subset.get_res()[0]
         subset.remove_res(initial_tuple)
         if unused < initial_tuple[1]: subset.add_res((initial_tuple[0], initial_tuple[1]-unused))
-        super().shrink_subset(subset)
 
     def get_appropriate_id(self, vm : DomainEntity):
         """For a given VM, get its appropriate subset ID (corresponds to its premium policy)
