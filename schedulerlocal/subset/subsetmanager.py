@@ -718,6 +718,7 @@ class MemSubsetManager(SubsetManager):
         subset : Subset (opt)
             The subset to shrink(if not specified, all subset will be shrinked)
         """
+        if not subset.get_res(): return # nothing to reduce
         unused = subset.unused_resources_count()
         initial_tuple = subset.get_res()[0]
         subset.remove_res(initial_tuple)
