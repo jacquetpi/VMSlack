@@ -663,7 +663,7 @@ class MemSubsetManager(SubsetManager):
         success = self.__check_overlap(new_tuple=new_tuple, initial_tuple=initial_tuple) 
         if not success: return False
         
-        subset.remove_res(initial_tuple)
+        if initial_tuple != None: subset.remove_res(initial_tuple)
         subset.add_res(new_tuple)
         return True
 
