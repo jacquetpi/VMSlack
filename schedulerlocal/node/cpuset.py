@@ -66,15 +66,7 @@ class ServerCpu(object):
             if cache_id == other_cpu.get_cache_level()[cache_level]:
                 return distance # Match on given cache
 
-        # Test siblings
-        distance+=10
-        if other_cpu.get_cpu_id() in self.sib_smt: # Very unlikely as they do not share cache
-          return distance
-        distance+=10
-        if other_cpu.get_cpu_id() in self.sib_cpu:
-          return distance
-
-       # At this point, we consider CPU from different NUMA node, we therefore use retrieved NUMA distance
+       # Test numa NUMA distance
         distance+= numa_distances[self.get_numa_node()][other_cpu.get_numa_node()]
         return distance
 

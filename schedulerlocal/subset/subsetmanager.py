@@ -386,10 +386,11 @@ class CpuSubsetManager(SubsetManager):
         success : bool
             Return success status of operation
         """
+        if amount<=0: return True
         available_cpus_ordered = self.__get_closest_available_cpus(subset)
         if len(available_cpus_ordered) < amount: return None
-        for i in range(amount): subset.add_res(available_cpus_ordered[i])
-        return True
+        subset.add_res(available_cpus_ordered[0])
+        return self.try_to_extend_subset(subset,amount=(amount-1))
 
     def __get_closest_available_cpus(self, subset : CpuSubset):
         """Retrieve the list of available CPUs ordered by their average distance value closest to specified Subset
@@ -408,7 +409,7 @@ class CpuSubsetManager(SubsetManager):
         cpuid_dict = {cpu.get_cpu_id():cpu for cpu in self.cpuset.get_cpu_list()}
         available_list = self.__get_available_cpus()
         allocated_list = subset.get_res()
-        available_cpu_weighted = self.__get_available_cpus_with_weight(from_list=available_list, to_list=allocated_list, exclude_max=True)
+        available_cpu_weighted = self.__get_available_cpus_with_weight(from_list=available_list, to_list=allocated_list, exclude_max=False)
         # Reorder distances from the closest one to the farthest one
         return [cpuid_dict[cpuid] for cpuid, v in sorted(available_cpu_weighted.items(), key=lambda item: item[1])]
 
@@ -453,15 +454,13 @@ class CpuSubsetManager(SubsetManager):
             total_count = 0
 
             exclude_identical = False
-            for subset_cpu in to_list: 
+            for subset_cpu in to_list:
                 if subset_cpu == available_cpu: 
                     exclude_identical = True
                     break
 
                 distance = self.cpuset.get_distance_between_cpus(subset_cpu, available_cpu)
-                if exclude_max and (distance >= self.distance_max): 
-                    total_distance = -1
-                    break
+                if exclude_max and (distance >= self.distance_max): continue
 
                 total_distance+=distance
                 total_count+=1
@@ -941,7 +940,7 @@ class SubsetManagerPool(object):
         success : bool
             Return if vm was found
         """
-        has_vm           = 0
+        has_vm = 0
         for subset_manager in self.subset_managers.values():
             if subset_manager.has_vm(vm_copy): has_vm+=1
         if has_vm >0: return True
