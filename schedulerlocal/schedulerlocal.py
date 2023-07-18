@@ -48,4 +48,4 @@ class SchedulerLocal:
         """Clean endpoint on shutdown
         ----------
         """
-        self.api_endpoint.shutdown()
+        if hasattr(self, 'api_endpoint'): self.api_endpoint.shutdown()

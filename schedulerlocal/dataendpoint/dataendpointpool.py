@@ -39,7 +39,7 @@ class DataEndpointPool(object):
         """
         subset_usage, vm_usage_dict = self.load_subset_only(timestamp, subset)
         if self.saver != None:
-            # Subset record
+            # Subset record
             self.saver.store(DataEndpoint.record(tmp=timestamp, rec='subset',\
                 res=subset.get_res_name(), val=subset_usage, config=subset.get_capacity(),\
                 subset='subset-' + str(subset.get_oversubscription_id()),\

@@ -688,20 +688,105 @@ class CpuSubset(Subset):
         # Update vm pinning
         self.sync_pinning()
         # Reset CPU time used to compute usage
-        for server_cpu in self.res_list: server_cpu.get_hist().clear_time()
+        for server_cpu in self.res_list: server_cpu.get_hist().clear_time() # TODO: needed?
         return success
 
     def sync_pinning(self):
         """Synchronize VM pinning to CPU according to the current ServerCPU list
         ----------
         """
-        template = self.connector.build_cpu_pinning(cpu_list=self.get_res(), host_config=self.cpu_count)
+        template = self.connector.build_cpu_pinning(cpu_list=self.get_pinning_res(), host_config=self.cpu_count)
         for consumer in self.consumer_list:
             consumer.set_cpu_pin(template)
             if consumer.is_deployed(): self.connector.update_cpu_pinning(vm=consumer)
 
+    def get_pinning_res(self):
+        """Get the resources to use for synchronisation. May be reimplemented
+
+        Returns
+        -------
+        list : ServerCPU list
+            list of resources to use
+        """
+        return self.get_res()
+
     def __str__(self):
         return 'CpuSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\
+            ' res:' + str([str(cpu.get_cpu_id()) for cpu in self.get_res()]) +\
+            ' vm:' + str([vm.get_name() for vm in self.get_consumers()])
+
+class CpuElasticSubset(CpuSubset):
+
+    """
+    A CpuElasticSubset is an arbitrary group of physical CPU to which consumers (e.g. VMs) can be attributed
+    Elastic refer to its capability to adapt its size based on usage:
+    We distinguish list of resources from list of active resources
+    ...
+
+    Public Methods reimplemented/introduced
+    -------
+    todo()
+        todo
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Additional attributes
+        self.active_res = list()
+
+    def update_active_res(self):
+        """Get resources to use for synchronisation purposes. Can be reimplemented
+
+        Returns
+        -------
+        resources : list
+            list of resources
+        ----------
+        """
+        # TODO
+        # Retrieve active resource list usage (carefull to delta computation, we already monitored cores on previous calls)
+
+        # Update active resource list
+
+        # VMPinning est fonctionnel pour les oversubscriptions statiques (où cumul_vm_alloc/oversubscription = pinage_physique)
+        # Ce calcul ne tient pas compte de l'usage des ressources et est sous-optimal d'un point de vue énergétique (pas assez de consolidation)
+        # CpuSubset a deux attributs : liste des consumers et liste des ressources
+        # On souhaite implémenter CpuElasticSubset qui rajoute un 3e attribut : liste des ressources actives
+        # La synchronisation du pinning des VM ne se ferait que sur cette liste là, permettant une meilleure consolidation
+
+        # Pbq: estimer la liste des ressources actives et traquer leur utilisation (!= de l'utilisation des res du subset).
+        # > En cas d'usage > X%, on devrait réattribuer liste des ressources actives = liste des ressources
+        # puis réaffiner
+
+        # # En multi subset:
+        # Equilibrage des liste de ressources actives sur la même socket? Responsabilité du subsetmanager   
+
+        # Synchronize with libvirt
+        super().sync_pinning()
+
+    def get_current_resources_usage(self):
+        """Get usage of physical CPU resources
+
+        Returns
+        -------
+        Usage : int
+            Percentage [0:1]
+        """
+        return self.cpu_explorer.get_usage_of(self.active_res)
+
+    def get_pinning_res(self):
+        """Get the resources to use for synchronisation. May be reimplemented
+
+        Returns
+        -------
+        list : ServerCPU list
+            list of resources to use
+        """
+        if not self.active_res: return self.get_res()
+        return self.active_res
+
+    def __str__(self):
+        return 'CpuElasticSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\
             ' res:' + str([str(cpu.get_cpu_id()) for cpu in self.get_res()]) +\
             ' vm:' + str([vm.get_name() for vm in self.get_consumers()])
 

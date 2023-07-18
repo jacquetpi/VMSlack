@@ -105,14 +105,14 @@ class DataEndpointLive(DataEndpoint):
         """Return subset resources usage. Must be reimplemented
         ----------
         """
-        # Use subset explorer
+        # Use subset explorer
         subset_usage = subset.get_current_resources_usage()
         # Use libvirt connector
         vm_usage = subset.get_current_consumers_usage()
         return subset_usage, vm_usage
 
     def load_global(self, timestamp : int, manager):
-        # Use subset explorer
+        # Use subset explorer
         return manager.get_current_resources_usage()
 
 class DataEndpointCSV(DataEndpoint):

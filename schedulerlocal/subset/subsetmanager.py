@@ -1,4 +1,4 @@
-from schedulerlocal.subset.subset import SubsetCollection, Subset, CpuSubset, MemSubset
+from schedulerlocal.subset.subset import SubsetCollection, Subset, CpuSubset, CpuElasticSubset, MemSubset
 from schedulerlocal.domain.domainentity import DomainEntity
 from schedulerlocal.node.cpuexplorer import CpuExplorer
 from schedulerlocal.node.memoryexplorer import MemoryExplorer
@@ -239,7 +239,7 @@ class SubsetManager(object):
         """
         raise NotImplementedError()
 
-    def update_monitoring(self, timestamp : int):
+    def iterate(self, timestamp : int):
         """Order a monitoring session on host resources and on each subset with specified timestamp key
         Use endpoint_pool to load and store from the appropriate location
         ----------
@@ -249,7 +249,7 @@ class SubsetManager(object):
         timestamp : int
             The timestamp key
         """
-        # Update global data: Nothing is done live with it currently but data are dumped for post analysis
+        # Update global data: Nothing is done live with it but data are dumped for post analysis
         data = self.endpoint_pool.load_global(timestamp=timestamp, subset_manager=self)
         # Update subset data
         clean_needed_list = self.collection.update_monitoring(timestamp=timestamp)
@@ -315,6 +315,7 @@ class SubsetManager(object):
         """
         return self.collection.get_consumers()
 
+
 class CpuSubsetManager(SubsetManager):
     """
     A CpuSubsetManager is an object in charge of determining appropriate CPU subset collection
@@ -338,7 +339,7 @@ class CpuSubsetManager(SubsetManager):
         self.cpu_explorer = CpuExplorer()
         super().__init__(**kwargs)
 
-    def try_to_create_subset(self,  initial_capacity : int, oversubscription : float):
+    def try_to_create_subset(self,  initial_capacity : int, oversubscription : float, subset_type : type = CpuSubset):
         """Try to create subset with specified capacity
         ----------
 
@@ -358,9 +359,10 @@ class CpuSubsetManager(SubsetManager):
         
         # Starting point
         available_cpus_ordered = self.__get_farthest_available_cpus()
+
         if len(available_cpus_ordered) < initial_capacity: return None
         starting_cpu = available_cpus_ordered[0]
-        cpu_subset = CpuSubset(connector=self.connector, cpu_explorer=self.cpu_explorer, endpoint_pool=self.endpoint_pool,\
+        cpu_subset = subset_type(connector=self.connector, cpu_explorer=self.cpu_explorer, endpoint_pool=self.endpoint_pool,\
             oversubscription=oversubscription, cpu_count=self.cpuset.get_host_count())
         cpu_subset.add_res(starting_cpu)
 
@@ -368,6 +370,7 @@ class CpuSubsetManager(SubsetManager):
         if initial_capacity>0:
             available_cpus_ordered = self.__get_closest_available_cpus(cpu_subset) # Recompute based on chosen starting point
             for i in range(initial_capacity): cpu_subset.add_res(available_cpus_ordered[i])
+
         return cpu_subset
 
     def try_to_extend_subset(self, subset : CpuSubset, amount : int):
@@ -578,6 +581,53 @@ class CpuSubsetManager(SubsetManager):
 
     def __str__(self):
         return 'CPUSubsetManager:\n' +  str(self.collection)
+
+class CpuElasticSubsetManager(CpuSubsetManager):
+    """
+    An CpuElasticSubsetManager is a CpuSubsetManager which manage an elastic subset
+    Traditional subsets size are only changed at new deployment/deletion.
+    An elastic subset size is continously adapted
+    ...
+
+    Public Methods reimplemented/introduced
+    -------
+    iterate()
+        Monitoring session and size adjustement of subset
+    """
+
+    def iterate(self, timestamp : int):
+        """Order a monitoring session on host resources and on each subset with specified timestamp key
+        Use endpoint_pool to load and store from the appropriate location
+        ----------
+
+        Parameters
+        ----------
+        timestamp : int
+            The timestamp key
+        """
+        super().iterate(timestamp=timestamp)
+        for subset in self.collection.get_subsets(): subset.update_active_res()
+
+    def try_to_create_subset(self,  initial_capacity : int, oversubscription : float):
+        """Try to create subset with specified capacity
+        ----------
+
+        Parameters
+        ----------
+        initial_capacity : int
+            Resources requested (without oversubscription consideration)
+        oversubscription : float
+            Subset oversubscription
+
+        Returns
+        -------
+        subset : Subset
+            Return CpuSubset created. None if failed.
+        """
+        return super().try_to_create_subset(initial_capacity=initial_capacity, oversubscription=oversubscription, subset_type=CpuElasticSubset)
+
+    def __str__(self):
+        return 'CPUElasticSubsetManager:\n' +  str(self.collection)
 
 class MemSubsetManager(SubsetManager):
     """
@@ -831,17 +881,23 @@ class SubsetManagerPool(object):
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
         self.subset_managers = {
-            'cpu': CpuSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, cpuset=self.cpuset, distance_max=50),\
+            'cpu': CpuElasticSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, cpuset=self.cpuset, distance_max=50),\
             'mem': MemSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, memset=self.memset)
             }
         self.watch_out_of_schedulers_vm() # Manage pre-installed VMs
 
     def iterate(self, timestamp : int):
-        """Iteration
+        """Iteration : update monitoring of subsets and adjust size of elastic ones
+        Print to the console current status if context has changed
+
+        Parameters
+        ----------
+        timestamp : int
+            Timestamp to use for monitoring session
         ----------
         """
         for subset_manager in self.subset_managers.values():
-            subset_manager.update_monitoring(timestamp=timestamp)
+            subset_manager.iterate(timestamp=timestamp)
         # Print status to console if context changed
         status_str = str(self)
         if not hasattr(self, 'prev_status_str') or getattr(self, 'prev_status_str') != status_str: print(status_str)
