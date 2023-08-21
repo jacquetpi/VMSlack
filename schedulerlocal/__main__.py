@@ -67,7 +67,7 @@ if __name__ == '__main__':
     saver  = None
     if debug_level>0:
         saver = DataEndpointCSV(input_file=None, output_file='debug/monitoring.csv')
-    endpoint_pool = DataEndpointPool(loader=DataEndpointLive(), saver=saver, cache_depth=2)
+    endpoint_pool = DataEndpointPool(loader=DataEndpointLive(), saver=saver)
 
     ###########################################
     # Finally, launch scheduling facilities

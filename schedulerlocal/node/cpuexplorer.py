@@ -75,6 +75,7 @@ class CpuExplorer:
             lines = f.readlines()
 
         for line in lines:
+            
             split = line.split(' ')
             if not split[self.fs_stats_keys['cpuid']].startswith('cpu'): break
             if split[self.fs_stats_keys['cpuid']] not in hist_by_cpu.keys(): continue

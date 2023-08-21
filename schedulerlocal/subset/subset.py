@@ -376,7 +376,7 @@ class Subset(object):
         """
         return {'pcap': self.get_capacity(), 'palloc': self.get_allocation(), 'vavail': self.oversubscription.get_available(with_new_vm=True)}
 
-    def update_monitoring(self, timestamp : int):
+    def get_monitoring(self, timestamp : int):
         """Order a monitoring session on current subset with specified timestamp key
         Use endpoint_pool to load and store from the appropriate location
         ----------
@@ -388,18 +388,22 @@ class Subset(object):
     
         Returns
         -------
+        current_usage : float
+            resource usage percentage
+        current_consumer_usage : dict
+            consumer resource usage percentage
         clean_needed : bool
             If VM left under the scope of the scheduler (without passing by manager), return True
         """
-        current_usage, current_vm_usage = self.endpoint_pool.load_subset(timestamp=timestamp, subset=self)
+        current_usage, current_consumer_usage = self.endpoint_pool.load_subset(timestamp=timestamp, subset=self)
         clean_needed = False
         for consumer in self.consumer_list: # Update consumer list
-            if consumer.get_uuid() not in current_vm_usage.keys(): 
+            if consumer.get_uuid() not in current_consumer_usage.keys(): 
                 if consumer.is_deployed(): 
                     print('Warning: a VM left without passing by scheduler', consumer.get_name())
                     self.remove_consumer(consumer)
                     clean_needed = True
-        return True
+        return current_usage, current_consumer_usage, clean_needed
 
 class SubsetCollection(object):
     """
@@ -572,8 +576,9 @@ class SubsetCollection(object):
             List of subset having VM which left without passing by our scheduler methods
         """
         clean_needed_list = list()
-        for subset in self.subset_dict.values(): 
-            if(subset.update_monitoring(timestamp=timestamp)): clean_needed_list.append(subset)
+        for subset in self.subset_dict.values():
+            __, __, clean_needed = subset.get_monitoring(timestamp=timestamp) 
+            if clean_needed: clean_needed_list.append(subset)
         return clean_needed_list
 
     def get_consumers(self):
@@ -723,6 +728,16 @@ class CpuElasticSubset(CpuSubset):
     We distinguish list of resources from list of active resources
     ...
 
+    Additional attributes
+    ----------
+    res_list : list
+        List of physical resources
+    hist_usage : list
+        list of resource usage percentage
+    hist_consumer_usage : list
+        dict of consumer resource usage percentage
+
+
     Public Methods reimplemented/introduced
     -------
     todo()
@@ -733,6 +748,8 @@ class CpuElasticSubset(CpuSubset):
         super().__init__(**kwargs)
         # Additional attributes
         self.active_res = list()
+        self.hist_usage = list()
+        self.hist_consumer_usage = list()
 
     def update_active_res(self):
         """Get resources to use for synchronisation purposes. Can be reimplemented
@@ -764,15 +781,30 @@ class CpuElasticSubset(CpuSubset):
         # Synchronize with libvirt
         super().sync_pinning()
 
-    def get_current_resources_usage(self):
-        """Get usage of physical CPU resources
+    def get_monitoring(self, timestamp : int):
+        """Order a monitoring session on current subset with specified timestamp key
+        Use endpoint_pool to load and store from the appropriate location
+        ----------
 
+        Parameters
+        ----------
+        timestamp : int
+            The timestamp key
+    
         Returns
         -------
-        Usage : int
-            Percentage [0:1]
+        current_usage : float
+            resource usage percentage
+        current_consumer_usage : dict
+            consumer resource usage percentage
+        clean_needed : bool
+            If VM left under the scope of the scheduler (without passing by manager), return True
         """
-        return self.cpu_explorer.get_usage_of(self.active_res)
+        current_usage, current_consumer_usage, clean_needed = super().get_monitoring(timestamp=timestamp)
+        # WIP
+        self.hist_usage.append(current_usage)
+        self.hist_consumer_usage.append(current_consumer_usage)
+        return current_usage, current_consumer_usage, clean_needed
 
     def get_pinning_res(self):
         """Get the resources to use for synchronisation. May be reimplemented
