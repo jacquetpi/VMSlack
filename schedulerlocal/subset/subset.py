@@ -2,6 +2,9 @@ from schedulerlocal.subset.subsetoversubscription import SubsetOversubscription,
 from schedulerlocal.domain.domainentity import DomainEntity
 from schedulerlocal.domain.libvirtconnector import LibvirtConnector, ConsumerNotAlived
 from schedulerlocal.dataendpoint.dataendpointpool import DataEndpointPool
+import os
+from math import ceil
+from numpy import percentile
 
 class Subset(object):
     """
@@ -390,20 +393,20 @@ class Subset(object):
         -------
         current_usage : float
             resource usage percentage
-        current_consumer_usage : dict
+        consumers_usage : dict
             consumer resource usage percentage
         clean_needed : bool
-            If VM left under the scope of the scheduler (without passing by manager), return True
+            If VM left out of the scope of the scheduler (without passing by manager), return True
         """
-        current_usage, current_consumer_usage = self.endpoint_pool.load_subset(timestamp=timestamp, subset=self)
+        subset_usage, consumers_usage = self.endpoint_pool.load_subset(timestamp=timestamp, subset=self)
         clean_needed = False
         for consumer in self.consumer_list: # Update consumer list
-            if consumer.get_uuid() not in current_consumer_usage.keys(): 
+            if consumer.get_uuid() not in consumers_usage.keys(): 
                 if consumer.is_deployed(): 
                     print('Warning: a VM left without passing by scheduler', consumer.get_name())
                     self.remove_consumer(consumer)
                     clean_needed = True
-        return current_usage, current_consumer_usage, clean_needed
+        return subset_usage, consumers_usage, clean_needed
 
 class SubsetCollection(object):
     """
@@ -734,7 +737,7 @@ class CpuElasticSubset(CpuSubset):
         List of physical resources
     hist_usage : list
         list of resource usage percentage
-    hist_consumer_usage : list
+    hist_consumers_usage : list
         dict of consumer resource usage percentage
 
 
@@ -749,10 +752,14 @@ class CpuElasticSubset(CpuSubset):
         # Additional attributes
         self.active_res = list()
         self.hist_usage = list()
-        self.hist_consumer_usage = list()
+        self.hist_consumers_usage = dict()
+        # TODO: retrieve pre-existing records?
+        self.HIST_MAX_TIMESTAMP = 3600 #records older than 1h are progressively purged
+        self.ACTIVE_PERCENTILE  = 95
+        self.ACTIVE_CONSUMER_REC = int(30/int(os.getenv('SCL_DELAY'))) # needs at least 10mn of record before computing active res
 
     def update_active_res(self):
-        """Get resources to use for synchronisation purposes. Can be reimplemented
+        """Call a sync pinning session
 
         Returns
         -------
@@ -760,26 +767,26 @@ class CpuElasticSubset(CpuSubset):
             list of resources
         ----------
         """
-        # TODO
-        # Retrieve active resource list usage (carefull to delta computation, we already monitored cores on previous calls)
+        res_needed_count = 0
+        for consumer in self.consumer_list:
+            if (consumer.get_uuid() not in self.hist_consumers_usage or len(self.hist_consumers_usage[consumer.get_uuid()]) < 3):
+                # not enough data
+                res_needed_count+= consumer.get_cpu()
+            else:
+                res_needed_count+=percentile([value for __, value in self.hist_consumers_usage[consumer.get_uuid()]], 95)
+        res_needed_count = ceil(res_needed_count)
+        self.active_res = self.get_res()[:res_needed_count]
 
-        # Update active resource list
+    def get_pinning_res(self):
+        """Get the resources to use for synchronisation. May be reimplemented
 
-        # VMPinning est fonctionnel pour les oversubscriptions statiques (où cumul_vm_alloc/oversubscription = pinage_physique)
-        # Ce calcul ne tient pas compte de l'usage des ressources et est sous-optimal d'un point de vue énergétique (pas assez de consolidation)
-        # CpuSubset a deux attributs : liste des consumers et liste des ressources
-        # On souhaite implémenter CpuElasticSubset qui rajoute un 3e attribut : liste des ressources actives
-        # La synchronisation du pinning des VM ne se ferait que sur cette liste là, permettant une meilleure consolidation
-
-        # Pbq: estimer la liste des ressources actives et traquer leur utilisation (!= de l'utilisation des res du subset).
-        # > En cas d'usage > X%, on devrait réattribuer liste des ressources actives = liste des ressources
-        # puis réaffiner
-
-        # # En multi subset:
-        # Equilibrage des liste de ressources actives sur la même socket? Responsabilité du subsetmanager   
-
-        # Synchronize with libvirt
-        super().sync_pinning()
+        Returns
+        -------
+        list : ServerCPU list
+            list of resources to use
+        """
+        self.update_active_res()
+        return self.active_res
 
     def get_monitoring(self, timestamp : int):
         """Order a monitoring session on current subset with specified timestamp key
@@ -793,33 +800,78 @@ class CpuElasticSubset(CpuSubset):
     
         Returns
         -------
-        current_usage : float
+        subset_usage : float
             resource usage percentage
-        current_consumer_usage : dict
+        consumers_usage : dict
             consumer resource usage percentage
         clean_needed : bool
-            If VM left under the scope of the scheduler (without passing by manager), return True
+            If VM left out of the scope of the scheduler (without passing by manager), return True
         """
-        current_usage, current_consumer_usage, clean_needed = super().get_monitoring(timestamp=timestamp)
-        # WIP
-        self.hist_usage.append(current_usage)
-        self.hist_consumer_usage.append(current_consumer_usage)
-        return current_usage, current_consumer_usage, clean_needed
+        subset_usage, consumers_usage, clean_needed = super().get_monitoring(timestamp=timestamp)
+        self.manage_hist_records(timestamp=timestamp, subset_usage=subset_usage, consumers_usage=consumers_usage)
+        return subset_usage, consumers_usage, clean_needed
 
-    def get_pinning_res(self):
-        """Get the resources to use for synchronisation. May be reimplemented
+    def manage_hist_records(self, timestamp, subset_usage, consumers_usage):
+        """Add new records to the subset collection attributes and manage expired data
+        ----------
 
-        Returns
-        -------
-        list : ServerCPU list
-            list of resources to use
+        Parameters
+        ----------
+        timestamp : int
+            The timestamp key
+        subset_usage : float
+            The last subset resource usage percentage
+        consumers_usage : float
+            The last consumers dict resource usage percentage
         """
-        if not self.active_res: return self.get_res()
-        return self.active_res
+        # Add global usage
+        if subset_usage is not None: self.hist_usage.append((timestamp, subset_usage))
+        self.__remove_from_list_expired_timestamp(timestamp=timestamp, list_of_timestamp_tuple=self.hist_usage)
+
+        # Add consumers usage
+        for consumer_uuid, usage_tuple in consumers_usage.items():
+            __, consumer_usage = usage_tuple # tuple from endpoint is (DomainEntity, value)
+            if consumer_usage is not None:
+                if consumer_uuid not in self.hist_consumers_usage: self.hist_consumers_usage[consumer_uuid] = list()
+                self.hist_consumers_usage[consumer_uuid].append((timestamp, consumer_usage))
+            # Manage expired data
+            if consumer_uuid in self.hist_consumers_usage: self.__remove_from_list_expired_timestamp(timestamp=timestamp, list_of_timestamp_tuple=self.hist_consumers_usage[consumer_uuid])
+
+    def remove_consumer(self, consumer):
+        """Remove a consumer from subset
+        ----------
+
+        Parameters
+        ----------
+        consumer : object
+            The consumer to remove
+        """
+        super().remove_consumer(consumer=consumer)
+        if (consumer is not None and consumer.get_uuid() in self.hist_consumers_usage): del self.hist_consumers_usage[consumer.get_uuid()]
+
+    def __remove_from_list_expired_timestamp(self, timestamp, list_of_timestamp_tuple : list):
+        """Parse a list of tuple where the first record is a timestamp and remove all values being older than
+        timestamp - self.HIST_MAX_TIMESTAMP
+        ----------
+
+        Parameters
+        ----------
+        timestamp : int
+            The timestamp key
+        list_of_timestamp_tuple : list
+            List of tuple (timestamp, value)
+        """
+        records_to_remove = list()
+        for record_tuple in list_of_timestamp_tuple:
+            record_timestamp, __ = record_tuple
+            if record_timestamp < (timestamp - self.HIST_MAX_TIMESTAMP): records_to_remove.append(record_tuple)
+            else: break # as values are parsed from older to newer ones
+        for record_to_remove in records_to_remove: list_of_timestamp_tuple.remove(record_to_remove)
 
     def __str__(self):
         return 'CpuElasticSubset oc:' + str(self.oversubscription) + ' alloc:' + str(self.get_allocation()) + ' capacity:' + str(self.get_capacity()) +\
             ' res:' + str([str(cpu.get_cpu_id()) for cpu in self.get_res()]) +\
+            ' active:' + str([str(cpu.get_cpu_id()) for cpu in self.active_res]) +\
             ' vm:' + str([vm.get_name() for vm in self.get_consumers()])
 
 class MemSubset(Subset):

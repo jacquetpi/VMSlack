@@ -606,7 +606,7 @@ class CpuElasticSubsetManager(CpuSubsetManager):
             The timestamp key
         """
         super().iterate(timestamp=timestamp)
-        for subset in self.collection.get_subsets(): subset.update_active_res()
+        for subset in self.collection.get_subsets(): subset.sync_pinning() # ElasticSubset pinning is continuously adapted
 
     def try_to_create_subset(self,  initial_capacity : int, oversubscription : float):
         """Try to create subset with specified capacity
