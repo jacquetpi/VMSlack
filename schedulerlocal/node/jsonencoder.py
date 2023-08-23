@@ -105,12 +105,12 @@ class GlobalEncoder(JSONEncoder):
         o : object
             object to convert
         """
-        from schedulerlocal.subset.subset import CpuSubset, MemSubset # avoid circular import, quite ugly :(
+        from schedulerlocal.subset.subset import CpuSubset, CpuElasticSubset, MemSubset # avoid circular import, quite ugly :(
         if type(o) is ServerCpuSet:
             return ServerCpuSetEncoder(*args, **kwargs).default(o)
         elif type(o) is ServerMemorySet:
             return ServerMemorySetEncoder(*args, **kwargs).default(o)
-        elif (type(o) is CpuSubset) or (type(o) is MemSubset):
+        elif (type(o) is CpuSubset) or (type(o) is CpuElasticSubset) or (type(o) is MemSubset):
             return SubsetEncoder(*args, **kwargs).default(o)
         elif type(o) is dict:
             return dict(o.__dict__)
