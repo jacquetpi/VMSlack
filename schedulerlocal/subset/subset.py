@@ -2,9 +2,8 @@ from schedulerlocal.subset.subsetoversubscription import SubsetOversubscription,
 from schedulerlocal.domain.domainentity import DomainEntity
 from schedulerlocal.domain.libvirtconnector import LibvirtConnector, ConsumerNotAlived
 from schedulerlocal.dataendpoint.dataendpointpool import DataEndpointPool
-import os
+import os, numpy as np
 from math import ceil
-from numpy import percentile
 
 class Subset(object):
     """
@@ -754,12 +753,13 @@ class CpuElasticSubset(CpuSubset):
         self.hist_usage = list()
         self.hist_consumers_usage = dict()
         # TODO: retrieve pre-existing records?
-        self.HIST_MAX_TIMESTAMP = 3600 #records older than 1h are progressively purged
-        self.ACTIVE_PERCENTILE  = 95
-        self.ACTIVE_CONSUMER_REC = int(30/int(os.getenv('SCL_DELAY'))) # needs at least 10mn of record before computing active res
+        # Retrieve specific configuration
+        self.MONITORING_WINDOW = int(os.getenv('SCL_ACT_MONITORING')) #records older than this value are progressively purged
+        self.MONITORING_MIN = int(int(os.getenv('SCL_ACT_MIN_LIFETIME'))/int(os.getenv('SCL_DELAY'))) # needs at least X s of records from a consumer before computing active res
+        self.MONITORING_LEEWAY = int(os.getenv('SCL_ACT_LEEWAY'))
 
     def update_active_res(self):
-        """Call a sync pinning session
+        """Update the active_res object attribute by computing which cores are likely to be required on next session
 
         Returns
         -------
@@ -768,14 +768,26 @@ class CpuElasticSubset(CpuSubset):
         ----------
         """
         res_needed_count = 0
+        threshold_cpu    = 0
         for consumer in self.consumer_list:
-            if (consumer.get_uuid() not in self.hist_consumers_usage or len(self.hist_consumers_usage[consumer.get_uuid()]) < 3):
-                # not enough data
-                res_needed_count+= consumer.get_cpu()
+            if threshold_cpu < consumer.get_cpu(): threshold_cpu = consumer.get_cpu() 
+            if (consumer.get_uuid() not in self.hist_consumers_usage or len(self.hist_consumers_usage[consumer.get_uuid()]) < self.MONITORING_MIN):
+                consumer_max_peak = consumer.get_cpu() # not enough data
             else:
-                res_needed_count+=percentile([value for __, value in self.hist_consumers_usage[consumer.get_uuid()]], 95)
-        res_needed_count = ceil(res_needed_count)
-        self.active_res = self.get_res()[:res_needed_count]
+                consumer_records  = [value for __, value in self.hist_consumers_usage[consumer.get_uuid()]]
+                consumer_max_peak = consumer.get_cpu() * max(consumer_records) + self.MONITORING_LEEWAY*np.std(consumer_records)
+                if consumer.get_cpu() < consumer_max_peak: consumer_max_peak = consumer.get_cpu()
+            
+            res_needed_count += consumer_max_peak
+
+        # Compute next peak
+        usage_current   = self.hist_usage[-1][1] if self.hist_usage else None
+        usage_predicted = ceil(res_needed_count)
+        if usage_predicted < threshold_cpu: usage_predicted = threshold_cpu
+
+        # Return corresponding cpu
+        self.active_res = self.get_res()[:usage_predicted]
+        
 
     def get_pinning_res(self):
         """Get the resources to use for synchronisation. May be reimplemented
@@ -851,7 +863,7 @@ class CpuElasticSubset(CpuSubset):
 
     def __remove_from_list_expired_timestamp(self, timestamp, list_of_timestamp_tuple : list):
         """Parse a list of tuple where the first record is a timestamp and remove all values being older than
-        timestamp - self.HIST_MAX_TIMESTAMP
+        timestamp - self.MONITORING_WINDOW
         ----------
 
         Parameters
@@ -864,7 +876,7 @@ class CpuElasticSubset(CpuSubset):
         records_to_remove = list()
         for record_tuple in list_of_timestamp_tuple:
             record_timestamp, __ = record_tuple
-            if record_timestamp < (timestamp - self.HIST_MAX_TIMESTAMP): records_to_remove.append(record_tuple)
+            if record_timestamp < (timestamp - self.MONITORING_WINDOW): records_to_remove.append(record_tuple)
             else: break # as values are parsed from older to newer ones
         for record_to_remove in records_to_remove: list_of_timestamp_tuple.remove(record_to_remove)
 
