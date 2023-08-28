@@ -15,8 +15,8 @@ def print_usage():
 
 if __name__ == '__main__':
 
-    short_options = "hd:t:"
-    long_options = ["help", "debug=", "topology="]
+    short_options = 'hd:t:l:'
+    long_options = ['help', 'debug=', 'topology=', 'load=']
 
     load_dotenv()
     SCL_URL   = os.getenv('SCL_URL')
@@ -25,6 +25,7 @@ if __name__ == '__main__':
 
     cpuset = None
     memset = None
+    input_csv = None
     debug_level = 0
     try:
         arguments, values = getopt.getopt(sys.argv[1:], short_options, long_options)
@@ -34,6 +35,8 @@ if __name__ == '__main__':
     for current_argument, current_value in arguments:
         if current_argument in ('-h', '--help'):
             print_usage()
+        elif current_argument in('-l', '--load'):
+            input_csv = current_value
         elif current_argument in('-t', '--topology'):
             with open(current_value, 'r') as f:
                 json_topology = f.read()
@@ -48,6 +51,7 @@ if __name__ == '__main__':
     if (cpuset is None) or (memset is None):
         to_exclude = [int(cpuid)for cpuid in os.getenv('TOPO_EXCLUDE').split(',')] if os.getenv('TOPO_EXCLUDE') else list()
         cpuset = CpuExplorer(to_exclude=to_exclude).build_cpuset()
+
         memset = MemoryExplorer().build_memoryset()
         if debug_level>0:
             topology = {'cpuset': cpuset, 'memset': memset}
@@ -64,10 +68,14 @@ if __name__ == '__main__':
     ###########################################
     # Third, manage Endpoints
     ###########################################
+    loader = None
     saver  = None
-    if debug_level>0:
-        saver = DataEndpointCSV(input_file=None, output_file='debug/monitoring.csv')
-    endpoint_pool = DataEndpointPool(loader=DataEndpointLive(), saver=saver)
+    if input_csv is None:
+        loader = DataEndpointLive()
+    else:
+        loader = DataEndpointCSV(input_file=input_csv, output_file=None)
+    if debug_level>0: saver = DataEndpointCSV(input_file=None, output_file='debug/monitoring.csv')
+    endpoint_pool = DataEndpointPool(loader=loader, saver=saver)
 
     ###########################################
     # Finally, launch scheduling facilities

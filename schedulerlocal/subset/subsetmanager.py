@@ -332,7 +332,7 @@ class CpuSubsetManager(SubsetManager):
         Deploy a VM to the appropriate CPU subset
     """
     def __init__(self, **kwargs):
-        req_attributes = ['connector', 'cpuset', 'distance_max']
+        req_attributes = ['connector', 'cpuset', 'distance_max', 'offline']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -363,7 +363,7 @@ class CpuSubsetManager(SubsetManager):
         if len(available_cpus_ordered) < initial_capacity: return None
         starting_cpu = available_cpus_ordered[0]
         cpu_subset = subset_type(connector=self.connector, cpu_explorer=self.cpu_explorer, endpoint_pool=self.endpoint_pool,\
-            oversubscription=oversubscription, cpu_count=self.cpuset.get_host_count())
+            oversubscription=oversubscription, cpu_count=self.cpuset.get_host_count(), offline=self.offline)
         cpu_subset.add_res(starting_cpu)
 
         initial_capacity-=1 # One was attributed
@@ -876,17 +876,17 @@ class SubsetManagerPool(object):
     """
 
     def __init__(self, **kwargs):
-        req_attributes = ['connector', 'endpoint_pool', 'cpuset', 'memset']
+        req_attributes = ['connector', 'endpoint_pool', 'cpuset', 'memset', 'offline']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
         self.subset_managers = {
-            'cpu': CpuElasticSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, cpuset=self.cpuset, distance_max=50),\
+            'cpu': CpuElasticSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, cpuset=self.cpuset, distance_max=50, offline=self.offline),\
             'mem': MemSubsetManager(connector=self.connector, endpoint_pool=self.endpoint_pool, memset=self.memset)
             }
         self.watch_out_of_schedulers_vm() # Manage pre-installed VMs
 
-    def iterate(self, timestamp : int):
+    def iterate(self, timestamp : int, offline : bool = False):
         """Iteration : update monitoring of subsets and adjust size of elastic ones
         Print to the console current status if context has changed
 
@@ -903,7 +903,7 @@ class SubsetManagerPool(object):
         if not hasattr(self, 'prev_status_str') or getattr(self, 'prev_status_str') != status_str: print(status_str)
         setattr(self, 'prev_status_str', status_str)
 
-    def deploy(self, vm : DomainEntity):
+    def deploy(self, vm : DomainEntity, offline : bool = False):
         """Deploy a VM on subset managers
         ----------
         
@@ -927,7 +927,7 @@ class SubsetManagerPool(object):
                 break
             treated.append(subset_manager)
         # If we succeed, the DOA DomainEntity was adapted according to the need of all subsetsManager. We apply changes using the connector
-        if success and not vm.is_deployed():
+        if success and not vm.is_deployed() and not offline:
             success, reason = self.connector.create_vm(vm)
         if success: return (success, reason)
         # If one step failed, we have to remove VM from others subset
@@ -935,7 +935,7 @@ class SubsetManagerPool(object):
             subset_manager.remove(vm)
         return (success, reason)
 
-    def remove(self, vm : DomainEntity = None, name : str = None):
+    def remove(self, vm : DomainEntity = None, name : str = None, offline : bool = False):
         """Remove a VM from subset managers
         ----------
         
@@ -966,14 +966,15 @@ class SubsetManagerPool(object):
             vm.set_being_destroyed(False)
             return (False, 'unable to remove it from all subsets')
         # second, remove from connector
-        (success, reason) = self.connector.delete_vm(vm)
+        if not offline: (success, reason) = self.connector.delete_vm(vm)
+        else: (success, reason) = (True, 'offline')
         if success:
             del vm
             return (success, reason)
         else: return (success, reason)
 
     def watch_out_of_schedulers_vm(self):
-        """Treat VM deployed without passing by scheduler as deployment
+        """Treat VM deployed outside the scheduler
         ----------
         """
         for vm in self.connector.get_vm_alive_as_entity():

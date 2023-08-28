@@ -30,6 +30,11 @@ Order the deletion of a vm
 curl 'http://127.0.0.1:8099/remove?name=example'
 ```
 
+Offline setting
+```bash
+python3 -m schedulerlocal --load=results/monitoring.csv' --topology=debug/topology_EPYC-7662-exp.json
+```
+
 ## Global
 
 TODO

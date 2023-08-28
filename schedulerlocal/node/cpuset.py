@@ -236,6 +236,7 @@ class ServerCpuSet(object):
         self.numa_distances = {int(k):v for k,v in raw_object['numa_distances'].items()}
         self.distances = {int(k):{int(kprime):vprime for kprime,vprime in v.items()} for k,v in raw_object['distances'].items()}
         self.cpu_list = list()
+        self.host_count = raw_object['host_count']
         for raw_cpu in raw_object['cpu_list']: self.cpu_list.append(ServerCpu(**raw_cpu))
         return self
 

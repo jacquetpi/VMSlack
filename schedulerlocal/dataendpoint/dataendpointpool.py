@@ -114,3 +114,37 @@ class DataEndpointPool(object):
             Data as dict
         """
         return self.loader.load_global(timestamp, subset_manager)
+
+    def is_live(self):
+        """Return a boolean value based on if values are loaded from a live system
+        ----------
+
+        Return
+        ----------
+        Live : boolean
+            True if system is live
+        """
+        return self.loader.is_live()
+
+    def get_timestamp_list(self):
+        """Return list of timestamp from loader object. Intended to be used only on an offline setting
+        ----------
+
+        Return
+        ----------
+        timestamps : List
+            List of timestamp
+        """
+        return self.loader.get_timestamp_list()
+
+    def get_deployed_vm_on(self, timestamp):
+        """Return deployed vm on given timestamp from loader object. Intended to be used only on an offline setting
+        ----------
+        """
+        return self.loader.get_deployed_vm_on(timestamp)
+
+    def get_destroyed_vm_on(self, timestamp):
+        """Return destroyed vm on given timestamp from loader object. Intended to be used only on an offline setting
+        ----------
+        """
+        return self.loader.get_destroyed_vm_on(timestamp)

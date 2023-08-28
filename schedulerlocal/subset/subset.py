@@ -611,7 +611,7 @@ class CpuSubset(Subset):
     """
 
     def __init__(self, **kwargs):
-        additional_attributes = ['connector', 'cpu_explorer', 'cpu_count']
+        additional_attributes = ['connector', 'cpu_explorer', 'cpu_count', 'offline']
         for req_attribute in additional_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', additional_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
@@ -660,7 +660,7 @@ class CpuSubset(Subset):
 
         Returns
         -------
-        Usage : int
+        Usage : float
             Percentage [0:1]
         """
         return self.cpu_explorer.get_usage_of(self.get_res())
@@ -705,7 +705,7 @@ class CpuSubset(Subset):
         template = self.connector.build_cpu_pinning(cpu_list=self.get_pinning_res(), host_config=self.cpu_count)
         for consumer in self.consumer_list:
             consumer.set_cpu_pin(template)
-            if consumer.is_deployed(): self.connector.update_cpu_pinning(vm=consumer)
+            if consumer.is_deployed() and not self.offline: self.connector.update_cpu_pinning(vm=consumer)
 
     def get_pinning_res(self):
         """Get the resources to use for synchronisation. May be reimplemented
@@ -771,6 +771,7 @@ class CpuElasticSubset(CpuSubset):
         threshold_cpu    = 0
         for consumer in self.consumer_list:
             if threshold_cpu < consumer.get_cpu(): threshold_cpu = consumer.get_cpu() 
+
             if (consumer.get_uuid() not in self.hist_consumers_usage or len(self.hist_consumers_usage[consumer.get_uuid()]) < self.MONITORING_MIN):
                 consumer_max_peak = consumer.get_cpu() # not enough data
             else:
