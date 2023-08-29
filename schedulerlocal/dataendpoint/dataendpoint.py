@@ -187,6 +187,9 @@ class DataEndpointCSV(DataEndpoint):
                     subset_id = line_as_list[self.keys.index('subset')]
                     if subset_id not in self.input_subset[resource]: self.input_subset[resource][subset_id] = dict()
                     self.input_subset[resource][subset_id][timestamp] = value
+                    # also initialize vm list associate to subset
+                    if subset_id not in self.input_vm[resource]: self.input_vm[resource][subset_id] = dict()
+                    if timestamp not in self.input_vm[resource][subset_id]: self.input_vm[resource][subset_id][timestamp] = list()
                 elif record == 'vm':
                     subset_id = line_as_list[self.keys.index('subset')]
                     uuid   = line_as_list[self.keys.index('vm_uuid')]
@@ -201,11 +204,13 @@ class DataEndpointCSV(DataEndpoint):
                     if uuid not in self.input_vm_spec: self.input_vm_spec[uuid] = dict()
                     if resource not in self.input_vm_spec[uuid]: self.input_vm_spec[uuid][resource] = dict()
                     self.input_vm_spec[uuid]['name']   = name
-                    if resource == 'cpu': self.input_vm_spec[uuid]['cpu_r']  = oc
+                    if resource == 'cpu': 
+                        self.input_vm_spec[uuid]['cpu_r']  = oc
+                        # Third manage deployment and departure data (on cpu only for unicity)
+                        if ('tmp_first' not in self.input_vm_spec[uuid]): self.input_vm_spec[uuid]['tmp_first'] = timestamp
+                        self.input_vm_spec[uuid]['tmp_last'] = timestamp
                     self.input_vm_spec[uuid][resource] = config
-                    # Third, manage deployment and deletion
-                    if 'tmp_first' not in self.input_vm_spec[uuid]: self.input_vm_spec[uuid]['tmp_first'] = timestamp
-                    self.input_vm_spec[uuid]['tmp_last'] = timestamp
+                    
                 else:
                     raise ValueError('Unknow record while loading trace', record)
         print('Loading completed')

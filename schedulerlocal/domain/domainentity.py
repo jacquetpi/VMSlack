@@ -148,6 +148,13 @@ class DomainEntity:
         if hasattr(self, 'system'): delattr(self, 'system')
         if hasattr(self, 'user'): delattr(self, 'user')
 
+    def __eq__(self, other): 
+        if not isinstance(other, DomainEntity): return False
+        if id(self) is id(other): return True
+        if self.uuid == other.uuid: return True
+        if (self.name == other.name) and (self.cpu == other.cpu) and (self.mem) == (other.mem): return True
+        return False
+
     def __str__(self):
         """Convert state to string
         ----------
