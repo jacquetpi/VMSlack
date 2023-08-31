@@ -786,7 +786,7 @@ class CpuElasticSubset(CpuSubset):
         usage_predicted = max(subset_records) + self.MONITORING_LEEWAY*np.std(subset_records) if len(subset_records) >= self.MONITORING_MIN else len(self.get_res())
 
         # Watchdog, was our last prediction too pessimistic?
-        if ceil(usage_current) == len(self.active_res): usage_predicted = len(self.get_res())
+        if usage_current is not None and (ceil(usage_current) == len(self.active_res)): usage_predicted = len(self.get_res())
         # Watchdog, do not overcommit a VM with itself
         if usage_predicted < threshold_cpu: usage_predicted = threshold_cpu
         # Watchdog, is there new VMs?
