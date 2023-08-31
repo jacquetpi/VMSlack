@@ -782,8 +782,8 @@ class CpuElasticSubset(CpuSubset):
 
         # Compute next peak
         subset_records  = [value for __, value in self.hist_usage]
-        usage_current   = usage_current[-1] if subset_records else None
-        usage_predicted = max(subset_records) + self.MONITORING_LEEWAY*np.std(subset_records) if len(subset_records) >= self.MONITORING_MIN else len(self.get_res())
+        usage_current   = subset_records[-1] if subset_records else None
+        usage_predicted = ceil(max(subset_records) + self.MONITORING_LEEWAY*np.std(subset_records)) if len(subset_records) >= self.MONITORING_MIN else len(self.get_res())
 
         # Watchdog, was our last prediction too pessimistic?
         if usage_current is not None and (ceil(usage_current) == len(self.active_res)): usage_predicted = len(self.get_res())
