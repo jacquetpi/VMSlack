@@ -771,19 +771,23 @@ class CpuElasticSubset(CpuSubset):
         threshold_cpu    = 0
         for consumer in self.consumer_list:
             if threshold_cpu < consumer.get_cpu(): threshold_cpu = consumer.get_cpu() 
-
-            if (consumer.get_uuid() not in self.hist_consumers_usage or len(self.hist_consumers_usage[consumer.get_uuid()]) < self.MONITORING_MIN):
-                consumer_max_peak = consumer.get_cpu() # not enough data
-            else:
-                consumer_records  = [value for __, value in self.hist_consumers_usage[consumer.get_uuid()]]
-                consumer_max_peak = consumer.get_cpu() * max(consumer_records) + self.MONITORING_LEEWAY*np.std(consumer_records)
-                if consumer.get_cpu() < consumer_max_peak: consumer_max_peak = consumer.get_cpu()
+            # if (consumer.get_uuid() not in self.hist_consumers_usage or len(self.hist_consumers_usage[consumer.get_uuid()]) < self.MONITORING_MIN):
+            #     consumer_max_peak = consumer.get_cpu() # not enough data
+            # else:
+            #     consumer_records  = [value for __, value in self.hist_consumers_usage[consumer.get_uuid()]]
+            #     consumer_max_peak = consumer.get_cpu() * max(consumer_records) + self.MONITORING_LEEWAY*np.std(consumer_records)
+            #     if consumer.get_cpu() < consumer_max_peak: consumer_max_peak = consumer.get_cpu()
             
-            res_needed_count += consumer_max_peak
+            # res_needed_count += consumer_max_peak
 
         # Compute next peak
-        usage_current   = self.hist_usage[-1][1] if self.hist_usage else None
-        usage_predicted = ceil(res_needed_count)
+        subset_records  = [value for __, value in self.hist_usage]
+        usage_current   = usage_current[-1] if subset_records else None
+        usage_predicted = max(subset_records) + self.MONITORING_LEEWAY*np.std(subset_records)
+        
+        # Watchdog, was our last prediction too pessimistic?
+        if ceil(usage_current) == len(self.active_res): usage_predicted = len(self.get_res())
+        # Watchdog, do not overcommit a VM with itself
         if usage_predicted < threshold_cpu: usage_predicted = threshold_cpu
 
         # Return corresponding cpu
