@@ -2,6 +2,7 @@ from schedulerlocal.subset.subsetoversubscription import SubsetOversubscription,
 from schedulerlocal.domain.domainentity import DomainEntity
 from schedulerlocal.domain.libvirtconnector import LibvirtConnector, ConsumerNotAlived
 from schedulerlocal.dataendpoint.dataendpointpool import DataEndpointPool
+from schedulerlocal.predictor.predictor import PredictorCsoaa
 import os, numpy as np
 from math import ceil
 
@@ -378,7 +379,7 @@ class Subset(object):
         """
         return {'pcap': self.get_capacity(), 'palloc': self.get_allocation(), 'vavail': self.oversubscription.get_available(with_new_vm=True)}
 
-    def get_monitoring(self, timestamp : int):
+    def update_monitoring(self, timestamp : int):
         """Order a monitoring session on current subset with specified timestamp key
         Use endpoint_pool to load and store from the appropriate location
         ----------
@@ -387,7 +388,7 @@ class Subset(object):
         ----------
         timestamp : int
             The timestamp key
-    
+
         Returns
         -------
         current_usage : float
@@ -400,8 +401,8 @@ class Subset(object):
         subset_usage, consumers_usage = self.endpoint_pool.load_subset(timestamp=timestamp, subset=self)
         clean_needed = False
         for consumer in self.consumer_list: # Update consumer list
-            if consumer.get_uuid() not in consumers_usage.keys(): 
-                if consumer.is_deployed(): 
+            if consumer.get_uuid() not in consumers_usage.keys():
+                if consumer.is_deployed():
                     print('Warning: a VM left without passing by scheduler', consumer.get_name())
                     self.remove_consumer(consumer)
                     clean_needed = True
@@ -579,7 +580,7 @@ class SubsetCollection(object):
         """
         clean_needed_list = list()
         for subset in self.subset_dict.values():
-            __, __, clean_needed = subset.get_monitoring(timestamp=timestamp) 
+            __, __, clean_needed = subset.update_monitoring(timestamp=timestamp) 
             if clean_needed: clean_needed_list.append(subset)
         return clean_needed_list
 
@@ -753,48 +754,12 @@ class CpuElasticSubset(CpuSubset):
         self.hist_usage = list()
         self.hist_consumers_usage = dict()
         # TODO: retrieve pre-existing records?
+        # TODO: is hist still needed in this class? Predictor object attributes may be enough
         # Retrieve specific configuration
         self.MONITORING_WINDOW = int(os.getenv('SCL_ACT_MONITORING')) #records older than this value are progressively purged
-        self.MONITORING_MIN = int(int(os.getenv('SCL_ACT_MIN_LIFETIME'))/int(os.getenv('SCL_DELAY'))) # needs at least X s of records from a consumer before computing active res
+        self.MONITORING_LEARNING = int(os.getenv('SCL_ACT_LEARNING')) 
         self.MONITORING_LEEWAY = int(os.getenv('SCL_ACT_LEEWAY'))
-
-    def update_active_res(self):
-        """Update the active_res object attribute by computing which cores are likely to be required on next session
-
-        Returns
-        -------
-        resources : list
-            list of resources
-        ----------
-        """
-        res_needed_count = 0
-        threshold_cpu    = 0
-        for consumer in self.consumer_list:
-            if threshold_cpu < consumer.get_cpu(): threshold_cpu = consumer.get_cpu() 
-            if (consumer.get_uuid() not in self.hist_consumers_usage or len(self.hist_consumers_usage[consumer.get_uuid()]) < self.MONITORING_MIN):
-                res_needed_count+= consumer.get_cpu() # not enough data
-            # else:
-            #     consumer_records  = [value for __, value in self.hist_consumers_usage[consumer.get_uuid()]]
-            #     consumer_max_peak = consumer.get_cpu() * max(consumer_records) + self.MONITORING_LEEWAY*np.std(consumer_records)
-            #     if consumer.get_cpu() < consumer_max_peak: consumer_max_peak = consumer.get_cpu()
-            
-            # res_needed_count += consumer_max_peak
-
-        # Compute next peak
-        subset_records  = [value for __, value in self.hist_usage]
-        usage_current   = subset_records[-1] if subset_records else None
-        usage_predicted = ceil(max(subset_records) + self.MONITORING_LEEWAY*np.std(subset_records)) if len(subset_records) >= self.MONITORING_MIN else len(self.get_res())
-
-        # Watchdog, was our last prediction too pessimistic?
-        if usage_current is not None and (ceil(usage_current) == len(self.active_res)): usage_predicted = len(self.get_res())
-        # Watchdog, do not overcommit a VM with itself
-        if usage_predicted < threshold_cpu: usage_predicted = threshold_cpu
-        # Watchdog, is there new VMs?
-        if usage_predicted < res_needed_count: usage_predicted = res_needed_count
-
-        # Return corresponding cpu
-        self.active_res = self.get_res()[:usage_predicted]
-        
+        self.predictor = PredictorCsoaa(monitoring_window=self.MONITORING_WINDOW, monitoring_learning=self.MONITORING_LEARNING, monitoring_leeway=self.MONITORING_LEEWAY)
 
     def get_pinning_res(self):
         """Get the resources to use for synchronisation. May be reimplemented
@@ -804,10 +769,10 @@ class CpuElasticSubset(CpuSubset):
         list : ServerCPU list
             list of resources to use
         """
-        self.update_active_res()
-        return self.active_res
+        if self.active_res: return self.active_res
+        return self.res_list
 
-    def get_monitoring(self, timestamp : int):
+    def update_monitoring(self, timestamp : int):
         """Order a monitoring session on current subset with specified timestamp key
         Use endpoint_pool to load and store from the appropriate location
         ----------
@@ -826,9 +791,19 @@ class CpuElasticSubset(CpuSubset):
         clean_needed : bool
             If VM left out of the scope of the scheduler (without passing by manager), return True
         """
-        subset_usage, consumers_usage, clean_needed = super().get_monitoring(timestamp=timestamp)
+        subset_usage, consumers_usage, clean_needed = super().update_monitoring(timestamp=timestamp)
         self.manage_hist_records(timestamp=timestamp, subset_usage=subset_usage, consumers_usage=consumers_usage)
+        if subset_usage is None:
+            return subset_usage, consumers_usage, clean_needed
+
+        # Update active resources
+        next_peak = self.predictor.predict(timestamp=timestamp, current_resources=self.count_res(), metric=subset_usage)
+        if next_peak != len(self.active_res):
+            self.active_res = self.res_list[:next_peak]
+            self.sync_pinning()
+
         return subset_usage, consumers_usage, clean_needed
+        
 
     def manage_hist_records(self, timestamp, subset_usage, consumers_usage):
         """Add new records to the subset collection attributes and manage expired data

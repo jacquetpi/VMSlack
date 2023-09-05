@@ -595,19 +595,6 @@ class CpuElasticSubsetManager(CpuSubsetManager):
         Monitoring session and size adjustement of subset
     """
 
-    def iterate(self, timestamp : int):
-        """Order a monitoring session on host resources and on each subset with specified timestamp key
-        Use endpoint_pool to load and store from the appropriate location
-        ----------
-
-        Parameters
-        ----------
-        timestamp : int
-            The timestamp key
-        """
-        super().iterate(timestamp=timestamp)
-        for subset in self.collection.get_subsets(): subset.sync_pinning() # ElasticSubset pinning is continuously adapted
-
     def try_to_create_subset(self,  initial_capacity : int, oversubscription : float):
         """Try to create subset with specified capacity
         ----------
