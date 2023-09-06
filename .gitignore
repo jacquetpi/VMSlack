@@ -5,6 +5,7 @@
 results/
 debug/topology_local.json
 debug/monitoring.csv
+debug/predictor.csv
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks
