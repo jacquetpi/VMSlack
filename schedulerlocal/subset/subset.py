@@ -797,7 +797,8 @@ class CpuElasticSubset(CpuSubset):
             return subset_usage, consumers_usage, clean_needed
 
         # Update active resources
-        next_peak = self.predictor.predict(timestamp=timestamp, current_resources=self.count_res(), metric=subset_usage)
+        next_peak = self.predictor.predict(timestamp=timestamp, current_resources=self.count_res(),\
+            allocation=self.get_allocation(), metric=subset_usage)
         if next_peak != len(self.active_res):
             self.active_res = self.res_list[:next_peak]
             self.sync_pinning()
