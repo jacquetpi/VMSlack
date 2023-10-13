@@ -304,6 +304,29 @@ class SubsetManager(object):
         """
         raise NotImplementedError()
 
+    def get_allocated_res_count(self, additional_vm = None):
+        """Get Allocated resource count
+        ----------
+
+        Parameters
+        ----------
+        additional_vm : VM
+            If specified, consider an additional VM when computing resources
+
+        Return
+        ----------
+        count : int
+            resource count
+        """
+        allocated = self.get_capacity() - self.get_available_res_count()
+        additional_res = 0
+        if additional_vm != None:
+            additional_res = self.get_request(additional_vm)
+            if self.collection.contains_subset(self.get_appropriate_id(additional_vm)):
+                targeted_subset = self.collection.get_subset(self.get_appropriate_id(additional_vm))
+                additional_res = targeted_subset.get_additional_res_count_required_for_vm(additional_vm)
+        return allocated + additional_res
+
     def get_consumers(self):
         """Get List of hosted VMs
         ----------
@@ -814,7 +837,7 @@ class MemSubsetManager(SubsetManager):
         return 'mem'
 
     def get_capacity(self):
-        """Get Memory capacity managed by ManagerSubset
+        """Get Memory capacity managed by ManagerSubset (MB)
         ----------
 
         Return
@@ -1043,6 +1066,36 @@ class SubsetManagerPool(object):
             List of hosted vm
         """
         return self.subset_managers['cpu'].get_consumers()
+
+    def progress(self, candidate_vm : DomainEntity):
+        """ Return progress to optimal ratio considering a candidate VM
+        ----------
+
+
+        Parameters
+        ----------
+        candidate_vm : DomainEntity
+            The candidate VM
+        """
+        optimal_ratio = self.memset.get_allowed() / self.cpuset.get_allowed()
+
+        if self.subset_managers['cpu'].get_allocated_res_count() > 0:
+            current_ratio = self.subset_managers['mem'].get_allocated_res_count() / self.subset_managers['cpu'].get_allocated_res_count()
+        else:
+            current_ratio = optimal_ratio
+        potential_ratio = self.subset_managers['mem'].get_allocated_res_count(additional_vm=candidate_vm) / self.subset_managers['cpu'].get_allocated_res_count(additional_vm=candidate_vm)
+
+        current_delta = abs(current_ratio - optimal_ratio)
+        potential_delta = abs(potential_ratio - optimal_ratio)
+        progress = current_delta - potential_delta
+        
+        if progress < 0:
+            multplier = 1 + (self.subset_managers['cpu'].get_allocated_res_count()/self.cpuset.get_allowed())
+            progress = progress * multplier
+        
+        return progress
+
+
 
     def __str__(self):
         return ''.join([str(subset_manager) + '\n' for subset_manager in self.subset_managers.values()])

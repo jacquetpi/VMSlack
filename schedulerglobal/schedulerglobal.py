@@ -79,6 +79,9 @@ class SchedulerGlobal(object):
         # Select the most appropriate cluster
         nodes_status = self.status()
         chosen_node = None
+
+        max_progress = None
+        max_host = None 
         for node, resources in nodes_status.items():
            
             cpu_match, mem_match = False, False
@@ -101,16 +104,19 @@ class SchedulerGlobal(object):
             # Else check space for subset creation
             elif(float(resources['mem']['avail']) >= (float(memory)*1024)): mem_match = True
 
-            # First fit
-            if cpu_match and mem_match:
-                chosen_node = node
-                break
+            if not (cpu_match and mem_match): # not suitable
+                continue
 
-        if chosen_node == None:
+            progress = self.requester.progress_on(host_url=node, cpu=cpu, memory=memory, ratio=ratio)
+            if (max_progress == None) or (max_progress < progress):
+                max_progress = progress
+                max_host = node
+                
+        if max_host == None:
             return {'success': False, 'reason':'No appropriate node found'}
             
         # Deploy
-        result = self.requester.deploy_on(host_url=chosen_node,name=name, cpu=cpu, memory=memory, ratio=ratio, disk=disk)
+        result = self.requester.deploy_on(host_url=max_host,name=name, cpu=cpu, memory=memory, ratio=ratio, disk=disk)
         # Update list of known VM
         if 'success' in result and result['success']:
             self.known_vm[name] = node

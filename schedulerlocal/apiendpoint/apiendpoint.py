@@ -49,6 +49,7 @@ class ApiEndpoint(object):
         app.route('/listvm', endpoint='listvm', methods = ['GET'])(lambda: self.listvm())
         app.route('/deploy', endpoint='deploy', methods = ['GET'])(lambda: self.deploy())
         app.route('/remove', endpoint='remove', methods = ['GET'])(lambda: self.remove())
+        app.route('/progress', endpoint='progress', methods = ['GET'])(lambda: self.progress())
 
         return app
     
@@ -101,6 +102,21 @@ class ApiEndpoint(object):
         success, reason = self.subset_manager_pool.remove(name=name)
         
         return {'success':success, 'reason':reason}
+
+    def progress(self):
+        """/progress uri : Return progress to optimal ratio considering a candidate VM
+        ----------
+        """
+        usage = 'Wrong usage: http://' + self.api_url + ':' + str(self.api_port) + '/progress?cpu=1&mem=1&oc=1.0'
+
+        args_required = ['cpu', 'mem', 'oc']
+        for arg in args_required:
+            if request.args.get(arg) is None: return usage
+        cpu  = int(request.args.get('cpu'))
+        mem  = int(float(request.args.get('mem'))*(1024**2)) # from GB to KB
+        oc   = float(request.args.get('oc'))
+        
+        return {'progress': self.subset_manager_pool.progress(candidate_vm=DomainEntity(cpu=cpu, mem=mem, cpu_ratio=oc))}
 
     def shutdown(self):
         """Manage thread shutdown

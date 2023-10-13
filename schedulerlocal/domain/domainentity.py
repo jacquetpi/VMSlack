@@ -24,11 +24,11 @@ class DomainEntity:
     """
 
     def __init__(self, **kwargs):
-        req_attributes = ['name', 'mem', 'cpu', 'cpu_ratio']
+        req_attributes = ['cpu', 'cpu_ratio', 'mem']
         for req_attribute in req_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', req_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
-        opt_attributes = ['uuid', 'cpu_pin', 'qcow2']
+        opt_attributes = ['name', 'uuid', 'cpu_pin', 'qcow2']
         for opt_attribute in opt_attributes:
             if opt_attribute in kwargs:
                 setattr(self, opt_attribute, kwargs[opt_attribute])

@@ -84,6 +84,35 @@ class ApiRequester(object):
             print('SCG Warning: Error with url', constructed_url, str(e))
             return {'success':False, 'reason': str(e)}
         
+    def progress_on(self,  host_url : str, cpu : str, memory : str, ratio):
+        """Deploy a VM on specified host based on requested specification
+        ----------
+
+        Parameters
+        ----------
+        host_url : str
+            Host targeted for deployment
+        cpu : str
+            Number of vcpu as str
+        memory : str
+            Memory (gb) as str
+        ratio :  str
+            Premium policy to apply
+
+        Returns
+        -------
+        response : str
+            Return result of operation as str
+        """
+        constructed_url = host_url + '/progress?cpu=' + cpu + '&mem=' + memory + '&oc=' + ratio
+        try:
+            response = requests.get(constructed_url)
+            return response.json()['progress']
+        except Exception as e:
+            print('SCG Warning: Error with url', constructed_url, str(e))
+            return {'success':False, 'reason': str(e)}
+        
+
     def status_of(self, host_url : str):
         """Return the state of requested host
         ----------
