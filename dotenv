@@ -13,7 +13,7 @@ SCG_NODE_URL_LIST="127.0.0.1:8100" # list of scheduler locals url separated by c
 SCL_DELAY=15 # Delay between two monitoring sessions in seconds
 SCL_URL="127.0.0.1"
 SCL_PORT="8100"
-#---- Active cores
+#---- Active cores (Not considered in this paper)
 SCL_ACT_MONITORING=3600 # Monitoring window duration for VMs when computing active cores in seconds
 SCL_ACT_LEARNING=300 # Aggregation window
 SCL_ACT_LEEWAY=5 # Value used to calibrate optimistic degree of predicted VM future usage peak (0 to disable). Higher SCL_DELAY should set higher Leeway value
