@@ -3,6 +3,7 @@
 
 # Misc
 results/
+figures/
 debug/topology_local.json
 debug/monitoring.csv
 debug/predictor.csv

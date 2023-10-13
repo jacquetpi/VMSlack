@@ -101,6 +101,7 @@ class SchedulerGlobal(object):
             # Else check space for subset creation
             elif(float(resources['mem']['avail']) >= (float(memory)*1024)): mem_match = True
 
+            # First fit
             if cpu_match and mem_match:
                 chosen_node = node
                 break
