@@ -48,10 +48,10 @@ Requests are made in a REST fashion way either, directly by a user, or by the gl
 ```bash
 curl 'http://127.0.0.1:8099/deploy?name=example&cpu=2&mem=2&oc=2&qcow2=/var/lib/libvirt/images/hello.qcow2'
 ```
-> name: VM name (must be unique)
-> cpu: vCPU requested
-> mem: GB requested (may be a float)
-> oc : oversubscription requested (float, 1.0: no oversubscription)
+> name: VM name (must be unique)  
+> cpu: vCPU requested  
+> mem: GB requested (may be a float)  
+> oc : oversubscription requested (float, 1.0: no oversubscription)  
 > qcow2: QCOW2 image (must be pre-existant, typically on a distributed storage mount point)
 
 - Online execution : Order the deletion of a vm
