@@ -1,4 +1,4 @@
-VMStack is a IaaS scheduler prototype showing how multiple oversubscription levels can be considered on the same cluster of server.\\
+VMStack is a IaaS scheduler prototype showing how multiple oversubscription levels can be considered on the same cluster of server.  
 It is composed of two elements : a local scheduler, deployed on each server, and a global scheduler.
 
 Each server must be equipped with QEMU/KVM and libvirt.
@@ -29,10 +29,12 @@ python3 -m schedulerlocal --load=debug/topology_i7-1185G7.json
 python3 -m schedulerlocal --debug=1
 ```
 
+
 Offline setting
 ```bash
 python3 -m schedulerlocal --load=results/monitoring.csv --topology=debug/topology_EPYC-7662-exp.json
 ```
+> Offline mode allows to parse requests from a previous execution and re-compute the decision taken by the scheduler
 
 Online setting
 ```bash
@@ -68,7 +70,7 @@ Online setting
 source venv/bin/activate
 python3 -m schedulerglobal
 ```
-The global scheduler will run and wait for requests\\
+The global scheduler will run and wait for requests  
 Requests are made in a REST fashion way either
 
 Live setting : Display status of each host
