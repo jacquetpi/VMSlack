@@ -616,6 +616,7 @@ class CpuSubset(Subset):
         for req_attribute in additional_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', additional_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
+        self.next_pinning_res = None
         super().__init__(**kwargs)
 
     def get_res_name(self):
@@ -699,11 +700,17 @@ class CpuSubset(Subset):
         for server_cpu in self.res_list: server_cpu.get_hist().clear_time() # TODO: needed?
         return success
 
-    def sync_pinning(self):
+    def sync_pinning(self, cpu_list : list = None):
         """Synchronize VM pinning to CPU according to the current ServerCPU list
+
+        Parameters
+        ----------
+        cpu_list : ServerCPU list (optional)
+            If specific cores must be used, use this argument. Otherwise, get_pinning_res() method will be called
         ----------
         """
-        template = self.connector.build_cpu_pinning(cpu_list=self.get_pinning_res(), host_config=self.cpu_count)
+        if cpu_list == None: cpu_list = self.get_pinning_res()
+        template = self.connector.build_cpu_pinning(cpu_list=cpu_list, host_config=self.cpu_count)
         for consumer in self.consumer_list:
             consumer.set_cpu_pin(template)
             if consumer.is_deployed() and not self.offline: self.connector.update_cpu_pinning(vm=consumer)

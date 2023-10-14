@@ -2,6 +2,7 @@ from schedulerlocal.subset.subset import SubsetCollection, Subset, CpuSubset, Cp
 from schedulerlocal.domain.domainentity import DomainEntity
 from schedulerlocal.node.cpuexplorer import CpuExplorer
 from schedulerlocal.node.memoryexplorer import MemoryExplorer
+import math
 
 class SubsetManager(object):
     """
@@ -362,6 +363,16 @@ class CpuSubsetManager(SubsetManager):
         self.cpu_explorer = CpuExplorer()
         super().__init__(**kwargs)
 
+    def deploy(self, vm : DomainEntity):
+        success = super().deploy(vm)
+        if success: self.balance_available_resources()
+        return success
+
+    def remove(self, vm : DomainEntity):
+        success = super().remove(vm)
+        if success: self.balance_available_resources()
+        return success
+
     def try_to_create_subset(self,  initial_capacity : int, oversubscription : float, subset_type : type = CpuSubset):
         """Try to create subset with specified capacity
         ----------
@@ -542,6 +553,37 @@ class CpuSubsetManager(SubsetManager):
             Its oversubscription ratio as subset ID
         """
         return vm.get_cpu_ratio()
+
+    def balance_available_resources(self):
+        """If critical size is not reached on an oversubscribed subset and available resources are present, distribute them
+        ----------
+
+        """
+        # Retrieve data from context
+        capacity_oversub   = 0
+        allocation_oversub = 0
+        allocation_oversub_list  = list()
+        oversub_list  = list()
+        critical_size_unreached  = False
+        min_oversubscribed_level = None
+        for level, subset in self.collection.get_dict().items():
+            if level <= 1.0:
+                continue
+            else:
+                capacity_oversub   += subset.get_capacity()
+                allocation_oversub += subset.get_allocation()
+                allocation_oversub_list.extend(subset.get_res())
+                oversub_list.append(subset)
+                critical_size_unreached = critical_size_unreached or (not subset.get_oversubscription().is_critical_size_reached())
+                if (min_oversubscribed_level == None) or (level < min_oversubscribed_level): min_oversubscribed_level = level
+
+        # Test if balance is useful/possible
+        if critical_size_unreached:
+            min_allocation_for_mutualisation =  math.ceil(allocation_oversub/min_oversubscribed_level)
+            potential_allocation = self.get_available_res_count() + allocation_oversub
+            if potential_allocation >= min_allocation_for_mutualisation:
+                allocation_oversub_list.extend(self.__get_available_cpus())
+                for subset in oversub_list: subset.sync_pinning(cpu_list=allocation_oversub_list)
 
     def get_current_resources_usage(self):
         """Get usage of physical CPU resources

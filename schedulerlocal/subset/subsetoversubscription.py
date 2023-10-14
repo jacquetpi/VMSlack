@@ -133,7 +133,6 @@ class SubsetOversubscriptionStatic(SubsetOversubscription):
         # Generic case
         return unused_cpu
 
-
     def get_additional_res_count_required_for_vm(self, vm : DomainEntity):
         """Return the number of additional physical resource required to deploy specified vm. 
         0 if no additional resources is required
@@ -190,11 +189,30 @@ class SubsetOversubscriptionStatic(SubsetOversubscription):
         ratio : float
            oversubscription
         """
+        # Best effort strategy
+        return self.ratio
+        # Guarantee strategy
+        # if self.is_critical_size_reached(with_new_vm=with_new_vm):
+        #     return self.ratio
+        # return 1.0
+
+    def is_critical_size_reached(self, with_new_vm : bool = False):
+        """Verify if critical size was reached or not
+        ----------
+
+        Parameters
+        ----------
+        with_new_vm : bool (opt)
+            If a new VM is to be considered while computing if critical size is reached
+
+        Returns
+        -------
+        answer : bool
+            True/False
+        """
         count = self.subset.count_consumer()
         if with_new_vm: count+=1
-        if count < self.critical_size: # Check if oversubscription critical size is reached
-            return 1.0
-        return self.ratio
+        return count >= self.critical_size
 
     def __str__(self):
         return 'static oc:' + str(self.ratio)
