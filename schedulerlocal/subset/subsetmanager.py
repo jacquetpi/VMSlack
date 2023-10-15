@@ -567,7 +567,7 @@ class CpuSubsetManager(SubsetManager):
         critical_size_unreached  = False
         min_oversubscribed_level = None
         for level, subset in self.collection.get_dict().items():
-            if level <= 1.0:
+            if level <= 1.0 or subset.count_consumer() <= 0:
                 continue
             else:
                 subset.sync_pinning()
