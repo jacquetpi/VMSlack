@@ -35,7 +35,7 @@ After that, executing cells sequentially in notebook ```demo.ipynb```  allows to
 
 ## Local scheduler - Online mode
 
-Instance on each server
+Instance on each server  
 Deployed by default on 8099 port. Can be changed through the ```.env``` file
 
 ```bash
@@ -73,7 +73,7 @@ curl 'http://127.0.0.1:8099/progress?cpu=2&mem=2&oc=2'
 
 ## Global scheduler
 
-Single instance in charge of selecting an appropriate host. Deploy
+Single instance in charge of selecting an appropriate host.  
 Deployed by default on 8100 port. Can be changed through the ```.env``` file
 
 - Execution
