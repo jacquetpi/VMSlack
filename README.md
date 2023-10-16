@@ -1,4 +1,4 @@
-VMStack is a IaaS scheduler prototype showing how multiple oversubscription levels can be considered on the same cluster of servers.  
+VMSlack is a IaaS scheduler prototype showing how multiple oversubscription levels can be considered on the same cluster of servers.  
 It is composed of two elements : a local scheduler, deployed on each server, and a global scheduler.
 
 Each server must be equipped with QEMU/KVM and libvirt for online execution.
