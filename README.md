@@ -82,7 +82,7 @@ source venv/bin/activate
 python3 -m schedulerglobal
 ```
 The global scheduler will run and wait for requests  
-Requests are made in a REST fashion way either
+Requests are made in a REST fashion way
 
 - Display status of each host
 ```bash
