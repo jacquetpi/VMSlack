@@ -28,8 +28,8 @@ The workload trace is an heavy file. We provide an example [hosted separately](h
 source venv/bin/activate
 python3 -m schedulerlocal --topology=debug/topology_EPYC-7662-exp.json --load=debug/monitoring-EPYC7662-ocall.csv --debug=1
 ```
-> Load a platform EPYC-7662 platform  
-> The debug=1 generates a new ```debug/monitoring.csv```trace. 
+> Load an EPYC-7662 platform jointly with a corresponding workload  
+> The debug=1 generates a new ```debug/monitoring.csv``` trace based on re-computation. 
 
 After that, executing cells sequentially in notebook ```demo.ipynb``̀  allows to re-generate figure 3 of the paper using this trace
 
