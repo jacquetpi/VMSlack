@@ -21,7 +21,7 @@ Configuration is being made by the ```.env``` file
 
 As an experience may be fastidious to set up, our local scheduler as an offline mode for quick execution  
 By loading an host CPU topology (*the platform*) and a workload (*the input*), anyone can execute a previously executed experiment.  
-The workload trace is an heavy file. We provide an example [hosted separately](https://drive.google.com/u/0/uc?id=18qy-4yKRAOS8s_REyPpFp8uUmpkrcakZ&export=download) that shoul be placed in ```debug``` folder
+The workload trace is an heavy file. We provide an example [hosted separately](https://drive.google.com/u/0/uc?id=18qy-4yKRAOS8s_REyPpFp8uUmpkrcakZ&export=download) that should be placed in ```debug``` folder
 
 - Offline execution 
 ```bash
@@ -29,7 +29,9 @@ source venv/bin/activate
 python3 -m schedulerlocal --topology=debug/topology_EPYC-7662-exp.json --load=debug/monitoring-EPYC7662-ocall.csv --debug=1
 ```
 > Load a platform EPYC-7662 platform  
-> The debug=1 generates a new ```debug/monitoring.csv```trace. Following cell execution in notebook ```demo.ipynb``̀  allows to re-generate figure 3 of the paper using this trace
+> The debug=1 generates a new ```debug/monitoring.csv```trace. 
+
+After that, following cell execution in notebook ```demo.ipynb``̀  allows to re-generate figure 3 of the paper using this trace
 
 ## Local scheduler - Online mode
 
