@@ -31,7 +31,7 @@ python3 -m schedulerlocal --topology=debug/topology_EPYC-7662-exp.json --load=de
 > Load a platform EPYC-7662 platform  
 > The debug=1 generates a new ```debug/monitoring.csv```trace. 
 
-After that, following cell execution in notebook ```demo.ipynb``̀  allows to re-generate figure 3 of the paper using this trace
+After that, executing cells sequentially in notebook ```demo.ipynb``̀  allows to re-generate figure 3 of the paper using this trace
 
 ## Local scheduler - Online mode
 
