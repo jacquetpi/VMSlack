@@ -17,30 +17,35 @@ python3 -m pip install -r requirements.txt
 
 Configuration is being made by the ```.env``` file
 
-## Local scheduler
+## Local scheduler - Offline mode
+
+As an experience may be fastidious to set up, our local scheduler as an offline mode for quick execution  
+By loading an host CPU topology (*the platform*) and a workload (*the input*), anyone can execute a previously executed experiment.  
+The workload trace is an heavy file. We provide an example [hosted separately](https://drive.google.com/u/0/uc?id=18qy-4yKRAOS8s_REyPpFp8uUmpkrcakZ&export=download) that shoul be placed in ```debug``` folder
+
+- Offline execution 
+```bash
+source venv/bin/activate
+python3 -m schedulerlocal --topology=debug/topology_EPYC-7662-exp.json --load=debug/monitoring-EPYC7662-ocall.csv --debug=1
+```
+> Load a platform EPYC-7662 platform  
+> The debug=1 generates a new ```debug/monitoring.csv```trace. Following cell execution in notebook ```demo.ipynb``̀  allows to re-generate figure 3 of the paper using this trace
+
+## Local scheduler - Online mode
 
 Instance on each server
 Deployed by default on 8099 port. Can be changed through the ```.env``` file
 
 ```bash
-python3 -m schedulerlocal -h
-python3 -m schedulerlocal --load=debug/topology_EPYC-7662.json
-python3 -m schedulerlocal --load=debug/topology_i7-1185G7.json
-python3 -m schedulerlocal --debug=1
+python3 -m schedulerlocal --help
 ```
-
-
-- Offline execution 
-```bash
-python3 -m schedulerlocal --load=results/monitoring.csv --topology=debug/topology_EPYC-7662-exp.json
-```
-> Offline mode allows to parse requests from a previous execution and re-compute the decision taken by the scheduler
 
 - Online execution
 ```bash
 source venv/bin/activate
 python3 -m schedulerlocal
 ```
+
 The local scheduler will run and wait for requests  
 Requests are made in a REST fashion way either, directly by a user, or by the global scheduler
 
