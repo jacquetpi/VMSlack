@@ -7,8 +7,8 @@ Each server must be equipped with QEMU/KVM and libvirt for online execution.
 
 ```bash
 apt-get update && apt-get install -y git python3 python3.venv
-git clone https://github.com/jacquetpi/vmpinning
-cd vmpinning/
+git clone https://github.com/jacquetpi/VMSlack
+cd VMSlack/
 cp dotenv .env
 python3 -m venv venv
 source venv/bin/activate
