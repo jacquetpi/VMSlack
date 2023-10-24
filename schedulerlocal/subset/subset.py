@@ -616,7 +616,6 @@ class CpuSubset(Subset):
         for req_attribute in additional_attributes:
             if req_attribute not in kwargs: raise ValueError('Missing required argument', additional_attributes)
             setattr(self, req_attribute, kwargs[req_attribute])
-        self.next_pinning_res = None
         super().__init__(**kwargs)
 
     def get_res_name(self):
