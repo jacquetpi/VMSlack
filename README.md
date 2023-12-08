@@ -1,4 +1,4 @@
-VMSlack is a IaaS scheduler prototype showing how multiple oversubscription levels can be considered on the same cluster of servers.  
+SlackVM is a IaaS scheduler prototype showing how multiple oversubscription levels can be considered on the same cluster of servers.  
 It is composed of two elements : a local scheduler, deployed on each server, and a global scheduler.
 
 Each server must be equipped with QEMU/KVM and libvirt for online execution.
@@ -7,8 +7,8 @@ Each server must be equipped with QEMU/KVM and libvirt for online execution.
 
 ```bash
 apt-get update && apt-get install -y git python3 python3.venv
-git clone https://github.com/jacquetpi/VMSlack
-cd VMSlack/
+git clone https://github.com/jacquetpi/slackvm
+cd slackvm/
 cp dotenv .env
 python3 -m venv venv
 source venv/bin/activate
